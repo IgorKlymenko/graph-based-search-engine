@@ -1,0 +1,26 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Pipeline artifacts (regenerated; can be large binaries)
+entity_cache.json
+entity_cache_v1.json
+vector_cache.npz
+resolved_entities.json
+resolved_entities_v1.json
+resolved_entity_vectors.npz
+relations_cache.json
+relations_cache_v2.json
+relation_vectors.npz
+
+# OS
+.DS_Store

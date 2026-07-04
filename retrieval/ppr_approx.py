@@ -119,21 +119,27 @@ async def fast_ppr_search(
     node_by_uuid = {n.uuid: n for n in nodes}
     ranked = sorted(scores.keys(), key=lambda u: scores[u], reverse=True)
 
+    candidate_uuids = [u for u in ranked[: config.top_nodes] if u in node_by_uuid]
+    scored_facts = await _load_candidate_facts(
+        driver, group_id, candidate_uuids, config.candidate_facts, filters
+    )
+
+    node_episodes: dict[str, set[str]] = defaultdict(set)
+    for sf in scored_facts:
+        node_episodes[sf.fact.source_uuid].update(sf.fact.episodes)
+        node_episodes[sf.fact.target_uuid].update(sf.fact.episodes)
+
     ranked_nodes = [
         RankedNode(
             uuid=u,
             name=node_by_uuid[u].name,
             summary=node_by_uuid[u].summary,
             score=float(scores[u]),
+            episodes=sorted(node_episodes.get(u, set())),
         )
         for u in ranked[: config.top_nodes]
         if u in node_by_uuid
     ]
-
-    candidate_uuids = [u for u in ranked[: config.top_nodes] if u in node_by_uuid]
-    scored_facts = await _load_candidate_facts(
-        driver, group_id, candidate_uuids, config.candidate_facts, filters
-    )
 
     scored_with_ppr: list[_ScoredFact] = []
     for sf in scored_facts:

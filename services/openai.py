@@ -9,6 +9,54 @@ import openai
 
 log = logging.getLogger(__name__)
 
+_sync_client: openai.OpenAI | None = None
+
+
+def get_sync_client() -> openai.OpenAI:
+    """Process-wide synchronous OpenAI client (reads OPENAI_API_KEY from env)."""
+    global _sync_client
+    if _sync_client is None:
+        _sync_client = openai.OpenAI()
+    return _sync_client
+
+
+def complete_json_schema(
+    *,
+    system: str,
+    user: str,
+    schema: dict[str, Any],
+    schema_name: str,
+    model: str,
+    temperature: float = 0.0,
+    timeout: float = 90.0,
+    max_retries: int = 2,
+) -> dict[str, Any]:
+    """Chat completion constrained to a strict JSON schema; returns parsed JSON.
+
+    Used by the extraction pipeline stages, which run many of these calls
+    concurrently from worker threads. The shared client is thread-safe.
+    """
+    client = get_sync_client().with_options(
+        timeout=timeout, max_retries=max_retries
+    )
+    response = client.chat.completions.create(
+        model=model,
+        temperature=temperature,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        response_format={
+            "type": "json_schema",
+            "json_schema": {
+                "name": schema_name,
+                "strict": True,
+                "schema": schema,
+            },
+        },
+    )
+    return json.loads(response.choices[0].message.content or "{}")
+
 
 class OpenAILLMClient:
     """LLMClient backed by the OpenAI Chat Completions API."""

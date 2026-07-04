@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
@@ -80,20 +81,26 @@ async def ppr_search(
         raise SearchTimeoutError("PPR power iteration timed out")
 
     top_node_indices = np.argsort(p)[::-1][: config.top_nodes]
+    candidate_uuids = [sorted_uuids[i] for i in top_node_indices]
+    scored_facts = await _load_candidate_facts(
+        driver, group_id, candidate_uuids, config.candidate_facts, filters
+    )
+
+    node_episodes: dict[str, set[str]] = defaultdict(set)
+    for sf in scored_facts:
+        node_episodes[sf.fact.source_uuid].update(sf.fact.episodes)
+        node_episodes[sf.fact.target_uuid].update(sf.fact.episodes)
+
     ranked_nodes = [
         RankedNode(
             uuid=sorted_uuids[i],
             name=node_by_uuid[sorted_uuids[i]].name,
             summary=node_by_uuid[sorted_uuids[i]].summary,
             score=float(p[i]),
+            episodes=sorted(node_episodes.get(sorted_uuids[i], set())),
         )
         for i in top_node_indices
     ]
-
-    candidate_uuids = [sorted_uuids[i] for i in top_node_indices]
-    scored_facts = await _load_candidate_facts(
-        driver, group_id, candidate_uuids, config.candidate_facts, filters
-    )
 
     scored_with_ppr: list[_ScoredFact] = []
     for sf in scored_facts:

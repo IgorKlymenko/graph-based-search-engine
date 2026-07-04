@@ -50,6 +50,8 @@ def parse_args() -> argparse.Namespace:
                    help="Print full answer at once instead of streaming")
     p.add_argument("--sources-only", action="store_true",
                    help="Print source files and Obsidian URIs, skip LLM answer")
+    p.add_argument("--show-prompt", action="store_true",
+                   help="Print the exact system+user prompt sent to the LLM before generating")
     return p.parse_args()
 
 
@@ -100,9 +102,14 @@ RETURN e.source_node_uuid AS source_uuid, e.target_node_uuid AS target_uuid
 """
 
 
-async def embed_query(client: AsyncOpenAI, text: str) -> list[float]:
-    resp = await client.embeddings.create(model="text-embedding-3-small", input=text)
-    return resp.data[0].embedding
+def embed_query(text: str) -> list[float]:
+    """Embed the query with e5-base-v2's 'query: ' prefix (see services/e5.py).
+
+    Must match whatever embedded n.name_embedding in Neo4j — graph_upload.py
+    embeds entity names with the same model's 'passage: ' prefix.
+    """
+    from services.e5 import embed_e5_sync
+    return embed_e5_sync([text], is_query=True)[0]
 
 
 async def run_ppr(group_id: str, seed_weights: dict[str, float], top_n: int) -> list[str]:
@@ -157,7 +164,8 @@ async def collect_sources(
     group_id: str,
     max_files: int,
 ) -> list[dict]:
-    """Return up to max_files source dicts, ranked by how many top entities they mention."""
+    """Return up to max_files source dicts (with contributing episode names),
+    ranked by how many top entities they mention."""
     rows = await neo4j_query(
         _SOURCES_QUERY,
         entity_uuids=entity_uuids,
@@ -169,7 +177,12 @@ async def collect_sources(
     for r in rows:
         sf = r["source_file"]
         file_hits[sf] = file_hits.get(sf, 0) + 1
-        file_meta[sf] = {"source_file": sf, "obsidian_uri": r["obsidian_uri"]}
+        meta = file_meta.setdefault(
+            sf, {"source_file": sf, "obsidian_uri": r["obsidian_uri"], "episodes": []}
+        )
+        ep_name = r.get("episode_name")
+        if ep_name and ep_name not in meta["episodes"]:
+            meta["episodes"].append(ep_name)
 
     ranked = sorted(file_hits, key=lambda f: -file_hits[f])[:max_files]
     return [file_meta[f] for f in ranked]
@@ -180,7 +193,7 @@ async def collect_sources(
 _EPISODES_BY_UUID_QUERY = """
 MATCH (ep:Episode)
 WHERE ep.uuid IN $episode_uuids OR ep.doc_id IN $episode_uuids
-RETURN ep.uuid AS uuid, ep.source_file AS source_file, ep.source AS obsidian_uri
+RETURN ep.uuid AS uuid, ep.source_file AS source_file, ep.source AS obsidian_uri, ep.name AS episode_name
 """
 
 
@@ -194,11 +207,12 @@ async def run_fast_dual(
     """Run fast-dual via the arena runner and return ranked source file dicts."""
     from arena.runner import ArenaArgs, run_fast_sequential_dual
     from arena.tracker import TokenTracker
+    from services.e5 import E5Embedder
     from services.neo4j import Neo4jGraphDriver
-    from services.openai import OpenAIEmbedder, OpenAILLMClient
+    from services.openai import OpenAILLMClient
 
     driver   = Neo4jGraphDriver.from_env()
-    embedder = OpenAIEmbedder("text-embedding-3-small")
+    embedder = E5Embedder()
     llm      = OpenAILLMClient()
     tracker  = TokenTracker()
 
@@ -236,9 +250,13 @@ async def run_fast_dual(
 
     # Resolve episode UUIDs → source files
     ep_rows = await neo4j_query(_EPISODES_BY_UUID_QUERY, episode_uuids=unique_ep_uuids)
-    # uuid → {source_file, obsidian_uri}
+    # uuid → {source_file, obsidian_uri, episode_name}
     ep_lookup: dict[str, dict] = {
-        r["uuid"]: {"source_file": r["source_file"], "obsidian_uri": r.get("obsidian_uri", "")}
+        r["uuid"]: {
+            "source_file": r["source_file"],
+            "obsidian_uri": r.get("obsidian_uri", ""),
+            "episode_name": r.get("episode_name") or r["uuid"][:8],
+        }
         for r in ep_rows if r.get("source_file")
     }
 
@@ -251,8 +269,13 @@ async def run_fast_dual(
             ep = ep_lookup.get(ep_uuid)
             if ep and ep["source_file"] not in seen:
                 seen.add(ep["source_file"])
-                file_hits[ep["source_file"]] = file_hits.get(ep["source_file"], 0) + 1
-                file_meta[ep["source_file"]] = ep
+                sf = ep["source_file"]
+                file_hits[sf] = file_hits.get(sf, 0) + 1
+                meta = file_meta.setdefault(
+                    sf, {"source_file": sf, "obsidian_uri": ep["obsidian_uri"], "episodes": []}
+                )
+                if ep["episode_name"] not in meta["episodes"]:
+                    meta["episodes"].append(ep["episode_name"])
 
     ranked = sorted(file_hits, key=lambda f: -file_hits[f])[:max_files]
 
@@ -285,14 +308,26 @@ async def generate_answer(
     sources: list[dict],
     model: str,
     stream: bool,
+    show_prompt: bool = False,
 ) -> None:
     docs = []
     for s in sources:
-        content = read_file(s["source_file"])
-        name    = Path(s["source_file"]).name
-        docs.append(f"=== {name} ===\n{content}")
+        content  = read_file(s["source_file"])
+        name     = Path(s["source_file"]).name
+        episodes = s.get("episodes", [])
+        header   = f"=== {name}" + (f" (episodes: {', '.join(episodes)})" if episodes else "") + " ==="
+        docs.append(f"{header}\n{content}")
 
     user_msg = f"Question: {query}\n\nDocuments:\n\n" + "\n\n".join(docs)
+
+    if show_prompt:
+        print("=" * 60)
+        print("PROMPT SENT TO LLM")
+        print("=" * 60)
+        print(f"[system]\n{_SYSTEM}\n")
+        print(f"[user]\n{user_msg}")
+        print("=" * 60)
+        print()
 
     if stream:
         resp = await client.chat.completions.create(
@@ -340,8 +375,8 @@ async def main() -> None:
         )
     else:
         # ppr path
-        print("Embedding query...")
-        embedding = await embed_query(client, args.query)
+        print("Embedding query (e5-base-v2, 'query: ' prefix)...")
+        embedding = embed_query(args.query)
 
         print("Seeding entity nodes...")
         seed_rows = await neo4j_query(
@@ -386,11 +421,14 @@ async def main() -> None:
 
     print(f"\n  {len(sources)} source files:\n")
     for s in sources:
-        name = Path(s["source_file"]).name
-        uri  = s.get("obsidian_uri", "")
+        name     = Path(s["source_file"]).name
+        uri      = s.get("obsidian_uri", "")
+        episodes = s.get("episodes", [])
         print(f"  {name}")
         if uri:
             print(f"    {uri}")
+        if episodes:
+            print(f"    episodes: {', '.join(episodes)}")
     print()
 
     if args.sources_only:
@@ -399,7 +437,10 @@ async def main() -> None:
     print("=" * 60)
     print(f"Answer ({args.model}):")
     print("=" * 60)
-    await generate_answer(client, args.query, sources, args.model, stream=not args.no_stream)
+    await generate_answer(
+        client, args.query, sources, args.model,
+        stream=not args.no_stream, show_prompt=args.show_prompt,
+    )
 
 
 if __name__ == "__main__":

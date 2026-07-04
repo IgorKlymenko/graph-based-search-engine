@@ -58,6 +58,7 @@ class RankedNode(BaseModel):
     name: str
     summary: str
     score: float
+    episodes: list[str] = Field(default_factory=list)
 
 
 class PPRResults(BaseModel):
