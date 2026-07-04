@@ -1,0 +1,10 @@
+{
+  "gpt-4o": {"in": 2.50, "out": 10.00},
+  "gpt-4o-mini": {"in": 0.15, "out": 0.60},
+  "gpt-4.1": {"in": 2.00, "out": 8.00},
+  "gpt-4.1-mini": {"in": 0.40, "out": 1.60},
+  "text-embedding-3-small": {"in": 0.02, "out": 0.0},
+  "text-embedding-3-large": {"in": 0.13, "out": 0.0},
+  "embedding": {"in": 0.02, "out": 0.0},
+  "claude-sonnet-4-6": {"in": 3.00, "out": 15.00}
+}
