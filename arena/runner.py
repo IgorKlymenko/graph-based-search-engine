@@ -60,6 +60,9 @@ class ArenaArgs:
     verbose: bool = False
     generate: bool = True
     fast_ppr_push_threshold: float = 1e-5
+    # Min cosine for the fact-embedding rerank. None falls back to rerank.py's
+    # per-mode default (0.30), which is too strict for text-embedding-3-small.
+    fact_min_relevance: float | None = None
 
 
 def _temporal_config(args: ArenaArgs) -> TemporalPPRSearchConfig:
@@ -67,7 +70,10 @@ def _temporal_config(args: ArenaArgs) -> TemporalPPRSearchConfig:
         mode=TemporalMode(args.temporal_mode),
         as_of=args.as_of,
         hydrate=args.hydrate,
-        ppr=PPRSearchConfig(expansion_model=args.llm_model),
+        ppr=PPRSearchConfig(
+            expansion_model=args.llm_model,
+            min_relevance=args.fact_min_relevance,
+        ),
     )
 
 
@@ -180,6 +186,7 @@ async def _temporal_fast_ppr(
     config: TemporalPPRSearchConfig,
     timings: StageTimings,
     push_threshold: float = 1e-5,
+    rerank_embedder: Embedder | None = None,
 ) -> TemporalPPRResults:
     """Temporal wrapper around fast_ppr_search for use in fast-ppr multihop."""
     fast_cfg = FastPPRConfig(
@@ -195,7 +202,10 @@ async def _temporal_fast_ppr(
         min_relevance=config.ppr.min_relevance,
         push_threshold=push_threshold,
     )
-    ppr_result = await fast_ppr_search(driver, embedder, llm_client, query, group_id, fast_cfg)
+    ppr_result = await fast_ppr_search(
+        driver, embedder, llm_client, query, group_id, fast_cfg,
+        rerank_embedder=rerank_embedder,
+    )
     as_of = make_aware(config.as_of) or datetime.now(timezone.utc)
     relevant_count = len(ppr_result.facts)
     filtered = [f for f in ppr_result.facts if temporal_match(f, config.mode, as_of)]
@@ -540,11 +550,20 @@ async def run_fast_sequential_dual(
     group_id: str,
     cli_args: ArenaArgs,
     tracker: TokenTracker,
+    rerank_embedder: Embedder | None = None,
 ) -> MethodResult:
-    """Sequential dual multihop using fast-ppr (forward push) instead of full PPR."""
+    """Sequential dual multihop using fast-ppr (forward push) instead of full PPR.
+
+    ``embedder`` seeds against entity names (e5); ``rerank_embedder`` embeds the
+    query in the fact-embedding space (OpenAI) for fact reranking. When omitted,
+    both fall back to ``embedder`` — correct only if facts and names share a space.
+    """
     timings = StageTimings()
     t_llm = TrackingLLMClient(llm_client, tracker)
     t_emb = TrackingEmbedder(embedder, tracker)
+    t_rerank_emb = (
+        TrackingEmbedder(rerank_embedder, tracker) if rerank_embedder else t_emb
+    )
     temporal_cfg = _temporal_config(cli_args)
     bridge_gen = BridgeGenerator(t_llm, cli_args.llm_model, 15.0)
     merger = FactMerger()
@@ -561,10 +580,12 @@ async def run_fast_sequential_dual(
                 fwd_result = await _temporal_fast_ppr(
                     driver, t_emb, t_llm, fwd_query, group_id, temporal_cfg, timings,
                     push_threshold=cli_args.fast_ppr_push_threshold,
+                    rerank_embedder=t_rerank_emb,
                 )
                 bwd_result = await _temporal_fast_ppr(
                     driver, t_emb, t_llm, bwd_query, group_id, temporal_cfg, timings,
                     push_threshold=cli_args.fast_ppr_push_threshold,
+                    rerank_embedder=t_rerank_emb,
                 )
                 new_fwd = merger.add(fwd_result.facts)
                 new_bwd = merger.add(bwd_result.facts)

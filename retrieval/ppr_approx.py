@@ -47,8 +47,17 @@ async def fast_ppr_search(
     config: FastPPRConfig,
     filters: SearchFilters | None = None,
     _query_embedding_override: list[float] | None = None,
+    rerank_embedder: Embedder | None = None,
 ) -> PPRResults:
-    """Approximate PPR via bidirectional random walk. Drop-in replacement for ppr_search()."""
+    """Approximate PPR via bidirectional random walk. Drop-in replacement for ppr_search().
+
+    ``embedder`` seeds the search against entity ``name_embedding`` (e5, 768-dim).
+    Facts are embedded in a different space at upload time (OpenAI
+    text-embedding-3-small, 1536-dim), so ``rerank_embedder`` must embed the query
+    in that fact space — otherwise the rerank dot products are cross-space garbage
+    and every fact is dropped. Defaults to ``embedder`` for callers that use a
+    single embedding space.
+    """
     validate_inputs(query, group_id)
     from retrieval.config import PPRSearchConfig
 
@@ -160,7 +169,7 @@ async def fast_ppr_search(
         query=query,
         candidates=top_candidates_facts,
         mode=config.rerank,
-        embedder=embedder,
+        embedder=rerank_embedder or embedder,
         llm_client=llm_client,
         min_relevance=config.min_relevance,
     )

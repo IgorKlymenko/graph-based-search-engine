@@ -42,6 +42,10 @@ def parse_args() -> argparse.Namespace:
                    help="[ppr] How many top PPR entity nodes to collect sources from (default: 15)")
     p.add_argument("--max-hops", default=4, type=int,
                    help="[fast-dual] Max reasoning hops (default: 4)")
+    p.add_argument("--min-relevance", default=0.20, type=float,
+                   help="[fast-dual] Min cosine for fact rerank "
+                        "(text-embedding-3-small space). Lower = more facts. "
+                        "Default: 0.20")
     p.add_argument("--max-files", default=8, type=int,
                    help="Max source files to pass to the LLM (default: 8)")
     p.add_argument("--model", default="gpt-4.1-mini",
@@ -203,16 +207,20 @@ async def run_fast_dual(
     max_hops: int,
     max_files: int,
     llm_model: str,
+    min_relevance: float,
 ) -> list[dict]:
     """Run fast-dual via the arena runner and return ranked source file dicts."""
     from arena.runner import ArenaArgs, run_fast_sequential_dual
     from arena.tracker import TokenTracker
     from services.e5 import E5Embedder
     from services.neo4j import Neo4jGraphDriver
-    from services.openai import OpenAILLMClient
+    from services.openai import OpenAIEmbedder, OpenAILLMClient
 
     driver   = Neo4jGraphDriver.from_env()
-    embedder = E5Embedder()
+    embedder = E5Embedder()          # seeds against entity name_embedding (e5, 768-dim)
+    # Facts are embedded at upload with OpenAI text-embedding-3-small (1536-dim);
+    # the query must be embedded in that same space to rerank them (graph_upload.py).
+    rerank_embedder = OpenAIEmbedder()
     llm      = OpenAILLMClient()
     tracker  = TokenTracker()
 
@@ -220,10 +228,14 @@ async def run_fast_dual(
         max_hops=max_hops,
         llm_model=llm_model,
         generate=False,  # we do our own generation
+        fact_min_relevance=min_relevance,
     )
 
     print(f"Running fast-dual (max_hops={max_hops})...")
-    result = await run_fast_sequential_dual(driver, embedder, llm, query, group_id, args, tracker)
+    result = await run_fast_sequential_dual(
+        driver, embedder, llm, query, group_id, args, tracker,
+        rerank_embedder=rerank_embedder,
+    )
 
     if result.error:
         print(f"fast-dual error: {result.error}")
@@ -372,6 +384,7 @@ async def main() -> None:
             max_hops=args.max_hops,
             max_files=args.max_files,
             llm_model=args.model,
+            min_relevance=args.min_relevance,
         )
     else:
         # ppr path
