@@ -8,12 +8,10 @@ WORKDIR /app
 
 # Dependencies first — cached layer, only invalidated when the lock changes
 COPY pyproject.toml uv.lock ./
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project --no-dev
+RUN uv sync --frozen --no-install-project --no-dev
 
 COPY src ./src
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev
 
 RUN useradd -m appuser && chown -R appuser /app
 USER appuser
