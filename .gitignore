@@ -5,6 +5,7 @@
 
 # Python
 __pycache__/
+.ipynb_checkpoints/
 *.py[cod]
 *.egg-info/
 .venv/
