@@ -58,9 +58,15 @@ ENTITY_CACHE    = Path("entity_cache.json")
 RESOLVED_CACHE  = Path("resolved_entities.json")
 RELATIONS_CACHE = Path("relations_cache.json")
 
-# Entity names: local e5-base-v2, asymmetric ("passage: " here, "query: " at search time)
-ENTITY_EMBED_MODEL = "intfloat/e5-base-v2"
-ENTITY_EMBED_DIMS  = 768
+# Entity names: OpenAI text-embedding-3-large — no prefixes, no local model to
+# load (avoids the sentence-transformers cold start when deploying the server)
+ENTITY_EMBED_MODEL = "text-embedding-3-large"
+ENTITY_EMBED_DIMS  = 3072
+# Previous model: local e5-base-v2, asymmetric ("passage: " here, "query: " at
+# search time). Re-upload the graph after switching — stored name_embedding
+# vectors and the query embedding must come from the same model.
+# ENTITY_EMBED_MODEL = "intfloat/e5-base-v2"
+# ENTITY_EMBED_DIMS  = 768
 
 # Fact texts (RELATES_TO descriptions AND Fact nodes): OpenAI, one model so
 # both rank in the same space against the query embedding
@@ -81,10 +87,12 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    p.add_argument("--saga", default="testing-1",
-                   help="Saga name — top-level container node (default: testing-1)")
+    p.add_argument("--saga", default=None,
+                   help="Saga name — top-level container node (default: the group id)")
     p.add_argument("--group-id", default="testing-1",
                    help="group_id stamped on every node and edge (default: testing-1)")
+    p.add_argument("--artifacts-dir", type=Path, default=Path("."),
+                   help="Directory holding the cache files (default: repo root)")
     p.add_argument("--vault-path", default=None,
                    help="Absolute path to the Obsidian vault root (auto-detected if omitted)")
     p.add_argument("--vault-name", default=None,
@@ -129,17 +137,24 @@ def load_relations_cache(path: Path) -> tuple[list[dict], list[dict]]:
 
 # ── embeddings ────────────────────────────────────────────────────────────────
 
-async def _embed_batch(client: AsyncOpenAI, texts: list[str]) -> list[list[float]]:
-    resp = await client.embeddings.create(model=FACT_EMBED_MODEL, input=texts)
+async def _embed_batch(
+    client: AsyncOpenAI, texts: list[str], model: str = FACT_EMBED_MODEL
+) -> list[list[float]]:
+    resp = await client.embeddings.create(model=model, input=texts)
     return [r.embedding for r in sorted(resp.data, key=lambda x: x.index)]
 
 
-async def embed_all(client: AsyncOpenAI, texts: list[str], label: str) -> list[list[float]]:
+async def embed_all(
+    client: AsyncOpenAI,
+    texts: list[str],
+    label: str,
+    model: str = FACT_EMBED_MODEL,
+) -> list[list[float]]:
     if not texts:
         return []
     out: list[list[float]] = []
     for i in range(0, len(texts), EMBED_BATCH):
-        out.extend(await _embed_batch(client, texts[i : i + EMBED_BATCH]))
+        out.extend(await _embed_batch(client, texts[i : i + EMBED_BATCH], model))
         print(f"  {label}: {min(i + EMBED_BATCH, len(texts))}/{len(texts)} embedded")
     return out
 
@@ -587,18 +602,21 @@ async def upload_node_facts(
 async def main() -> None:
     args = parse_args()
 
-    for path in (ENTITY_CACHE, RESOLVED_CACHE, RELATIONS_CACHE):
+    entity_cache    = args.artifacts_dir / ENTITY_CACHE
+    resolved_cache  = args.artifacts_dir / RESOLVED_CACHE
+    relations_cache = args.artifacts_dir / RELATIONS_CACHE
+    for path in (entity_cache, resolved_cache, relations_cache):
         if not path.exists():
             sys.exit(f"missing cache: {path}")
 
-    mentions          = json.loads(ENTITY_CACHE.read_text())["mentions"]
-    resolved_data     = json.loads(RESOLVED_CACHE.read_text())
+    mentions          = json.loads(entity_cache.read_text())["mentions"]
+    resolved_data     = json.loads(resolved_cache.read_text())
     entities          = resolved_data["entities"]
     mention_to_canon  = resolved_data["mention_to_canonical"]
-    edges, node_facts = load_relations_cache(RELATIONS_CACHE)
+    edges, node_facts = load_relations_cache(relations_cache)
 
-    saga     = args.saga
     group_id = args.group_id
+    saga     = args.saga or group_id
 
     source_files = list({m["source_file"] for m in mentions})
     if args.vault_path and args.vault_name:
@@ -633,14 +651,17 @@ async def main() -> None:
         edge_embeddings   = [empty] * len(edges)
         nfact_embeddings  = [empty] * len(node_facts)
     else:
-        from services.e5 import embed_e5_sync
-
         oai = AsyncOpenAI()
-        print(f"\nEmbedding entity names ({ENTITY_EMBED_MODEL}, 'passage: ' prefix)...")
-        name_embeddings = embed_e5_sync(
-            [e["canonical"] for e in entities], is_query=False
+        print(f"\nEmbedding entity names ({ENTITY_EMBED_MODEL})...")
+        name_embeddings = await embed_all(
+            oai, [e["canonical"] for e in entities], "entity names",
+            model=ENTITY_EMBED_MODEL,
         )
-        print(f"  {len(name_embeddings)} entities embedded")
+        # Previous model: local e5-base-v2 with its "passage: " prefix
+        # from services.e5 import embed_e5_sync
+        # name_embeddings = embed_e5_sync(
+        #     [e["canonical"] for e in entities], is_query=False
+        # )
         print("Embedding edge facts...")
         edge_embeddings = await embed_all(
             oai, [e["relation_description"] for e in edges], "edge facts")

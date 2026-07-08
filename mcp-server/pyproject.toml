@@ -1,0 +1,21 @@
+[project]
+name = "kg-mcp-server"
+version = "0.1.0"
+description = "MCP server exposing knowledge-graph search over streamable HTTP"
+requires-python = ">=3.12"
+dependencies = [
+    "mcp>=1.28.1",
+    "neo4j>=6.2.0",
+    "numpy>=1.26",
+    "openai>=2.44.0",
+    "python-dotenv>=1.2.2",
+    "scipy>=1.12",
+    "uvicorn>=0.30",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/app"]

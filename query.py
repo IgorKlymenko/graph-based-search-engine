@@ -106,14 +106,20 @@ RETURN e.source_node_uuid AS source_uuid, e.target_node_uuid AS target_uuid
 """
 
 
-def embed_query(text: str) -> list[float]:
-    """Embed the query with e5-base-v2's 'query: ' prefix (see services/e5.py).
+# Must match whatever embedded n.name_embedding in Neo4j (graph_upload.py's
+# ENTITY_EMBED_MODEL) — mixing embedding spaces silently breaks seed search.
+QUERY_EMBED_MODEL = "text-embedding-3-large"
 
-    Must match whatever embedded n.name_embedding in Neo4j — graph_upload.py
-    embeds entity names with the same model's 'passage: ' prefix.
-    """
-    from services.e5 import embed_e5_sync
-    return embed_e5_sync([text], is_query=True)[0]
+
+def embed_query(text: str) -> list[float]:
+    """Embed the query with the same OpenAI model graph_upload.py used for
+    entity names (no local model — avoids the cold start at server boot)."""
+    from services.openai import get_sync_client
+    resp = get_sync_client().embeddings.create(model=QUERY_EMBED_MODEL, input=text)
+    return resp.data[0].embedding
+    # Previous model: local e5-base-v2 with its "query: " prefix
+    # from services.e5 import embed_e5_sync
+    # return embed_e5_sync([text], is_query=True)[0]
 
 
 async def run_ppr(group_id: str, seed_weights: dict[str, float], top_n: int) -> list[str]:
@@ -212,12 +218,15 @@ async def run_fast_dual(
     """Run fast-dual via the arena runner and return ranked source file dicts."""
     from arena.runner import ArenaArgs, run_fast_sequential_dual
     from arena.tracker import TokenTracker
-    from services.e5 import E5Embedder
     from services.neo4j import Neo4jGraphDriver
     from services.openai import OpenAIEmbedder, OpenAILLMClient
 
     driver   = Neo4jGraphDriver.from_env()
-    embedder = E5Embedder()          # seeds against entity name_embedding (e5, 768-dim)
+    # Seeds against entity name_embedding — same model as graph_upload.py
+    embedder = OpenAIEmbedder(QUERY_EMBED_MODEL)
+    # Previous seed embedder: local e5-base-v2 (768-dim)
+    # from services.e5 import E5Embedder
+    # embedder = E5Embedder()
     # Facts are embedded at upload with OpenAI text-embedding-3-small (1536-dim);
     # the query must be embedded in that same space to rerank them (graph_upload.py).
     rerank_embedder = OpenAIEmbedder()
@@ -388,7 +397,7 @@ async def main() -> None:
         )
     else:
         # ppr path
-        print("Embedding query (e5-base-v2, 'query: ' prefix)...")
+        print(f"Embedding query ({QUERY_EMBED_MODEL})...")
         embedding = embed_query(args.query)
 
         print("Seeding entity nodes...")
