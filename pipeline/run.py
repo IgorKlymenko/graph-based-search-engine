@@ -7,6 +7,12 @@ reused when it is newer than its inputs; ``--force`` reruns from ``--from``.
     uv run python -m pipeline.run --notes-dir /Applications/reink
     uv run python -m pipeline.run --notes-dir ./notes --from relations --force
     uv run python -m pipeline.run --notes-dir ./notes --skip-upload
+    uv run python -m pipeline.run --notes-dir ./other --group-id my-new-group
+
+With ``--group-id`` every stage artifact lives in ``artifacts/<group_id>/`` and
+the id is stamped on all uploaded nodes/edges — the group is fully isolated
+from other groups' caches and search results. Without it, artifacts stay at
+the repo root (the original layout).
 """
 
 from __future__ import annotations
@@ -17,6 +23,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 from dotenv import load_dotenv
@@ -24,6 +31,30 @@ from dotenv import load_dotenv
 from pipeline import config
 
 STAGES = ["mentions", "embed", "resolve", "entity-vectors", "relations", "upload"]
+
+
+class ArtifactPaths(NamedTuple):
+    """Locations of the stage artifacts for one document group."""
+
+    base: Path
+    entity: Path
+    vector: Path
+    resolved: Path
+    entity_vector: Path
+    relations: Path
+
+
+def artifact_paths(group_id: str | None) -> ArtifactPaths:
+    """Caches at the repo root by default; ``artifacts/<group_id>/`` when set."""
+    base = Path("artifacts") / group_id if group_id else Path(".")
+    return ArtifactPaths(
+        base=base,
+        entity=base / config.ENTITY_CACHE.name,
+        vector=base / config.VECTOR_CACHE.name,
+        resolved=base / config.RESOLVED_CACHE.name,
+        entity_vector=base / config.ENTITY_VECTOR_CACHE.name,
+        relations=base / config.RELATIONS_CACHE.name,
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -49,8 +80,12 @@ def parse_args() -> argparse.Namespace:
                    help="Forward --dry-run to graph_upload.py (no Neo4j writes)")
     p.add_argument("--skip-embeddings", action="store_true",
                    help="Forward --skip-embeddings to graph_upload.py")
-    p.add_argument("--saga", default=None)
-    p.add_argument("--group-id", default=None)
+    p.add_argument("--saga", default=None,
+                   help="Saga container node name (default: the group id)")
+    p.add_argument("--group-id", default=None,
+                   help="Isolated document group: caches live in "
+                        "artifacts/<group_id>/ and the id is stamped on every "
+                        "uploaded node/edge (default: repo-root caches)")
     p.add_argument("--min-confidence", type=float, default=None)
     return p.parse_args()
 
@@ -79,8 +114,9 @@ def _selected_stages(args: argparse.Namespace) -> list[str]:
     return STAGES[STAGES.index(args.from_stage):]
 
 
-def _run_upload(args: argparse.Namespace) -> None:
-    cmd = ["uv", "run", "python", "graph_upload.py", "--skip-facts"]
+def _run_upload(args: argparse.Namespace, artifacts_dir: Path) -> None:
+    cmd = ["uv", "run", "python", "graph_upload.py", "--skip-facts",
+           "--artifacts-dir", str(artifacts_dir)]
     if args.dry_run:
         cmd.append("--dry-run")
     if args.skip_embeddings:
@@ -101,6 +137,11 @@ def main() -> None:
     if not args.notes_dir.is_dir():
         sys.exit(f"--notes-dir is not a directory: {args.notes_dir}")
 
+    paths = artifact_paths(args.group_id)
+    if args.group_id:
+        paths.base.mkdir(parents=True, exist_ok=True)
+        print(f"group {args.group_id!r}: artifacts in {paths.base}/")
+
     stages = _selected_stages(args)
     forced = args.force or args.only is not None
 
@@ -118,58 +159,71 @@ def main() -> None:
                 token_budget=args.token_budget,
                 file_workers=config.FILE_WORKERS,
                 episode_workers=config.EPISODE_WORKERS,
+                cache_path=paths.entity,
             )
 
         elif name == "embed":
-            if not forced and _is_fresh(config.VECTOR_CACHE, [config.ENTITY_CACHE]):
+            if not forced and _is_fresh(paths.vector, [paths.entity]):
                 print("[2/6] embed: fresh — skipped")
             else:
                 from pipeline import embed_mentions
 
-                embed_mentions.run()
+                embed_mentions.run(
+                    cache_path=paths.entity, vector_cache=paths.vector
+                )
 
         elif name == "resolve":
-            inputs = [config.VECTOR_CACHE, config.ENTITY_CACHE]
-            if not forced and _is_fresh(config.RESOLVED_CACHE, inputs):
+            inputs = [paths.vector, paths.entity]
+            if not forced and _is_fresh(paths.resolved, inputs):
                 print("[4/6] resolve: fresh — skipped")
             else:
                 from pipeline import resolution
 
-                vectors = _load_surface_vectors(config.VECTOR_CACHE)
-                mentions_data = json.loads(config.ENTITY_CACHE.read_text())["mentions"]
+                vectors = _load_surface_vectors(paths.vector)
+                mentions_data = json.loads(paths.entity.read_text())["mentions"]
                 resolution.run(
                     vectors,  # type: ignore[arg-type]
                     mentions_data,
                     resolve_model=config.RESOLVE_MODEL,
                     escalate_model=config.ESCALATE_MODEL,
                     workers=config.RESOLVE_WORKERS,
+                    cache_path=paths.resolved,
                 )
 
         elif name == "entity-vectors":
-            inputs = [config.RESOLVED_CACHE, config.VECTOR_CACHE]
-            if not forced and _is_fresh(config.ENTITY_VECTOR_CACHE, inputs):
+            inputs = [paths.resolved, paths.vector]
+            if not forced and _is_fresh(paths.entity_vector, inputs):
                 print("[5/6] entity vectors: fresh — skipped")
             else:
                 from pipeline import entity_vectors
 
-                resolved = json.loads(config.RESOLVED_CACHE.read_text())
-                surface_vectors = _load_surface_vectors(config.VECTOR_CACHE)
-                entity_vectors.run(resolved["entities"], surface_vectors)
+                resolved = json.loads(paths.resolved.read_text())
+                surface_vectors = _load_surface_vectors(paths.vector)
+                entity_vectors.run(
+                    resolved["entities"],
+                    surface_vectors,
+                    cache_path=paths.entity_vector,
+                )
 
         elif name == "relations":
-            inputs = [config.ENTITY_CACHE, config.RESOLVED_CACHE]
-            if not forced and _is_fresh(config.RELATIONS_CACHE, inputs):
+            inputs = [paths.entity, paths.resolved]
+            if not forced and _is_fresh(paths.relations, inputs):
                 print("[6/6] relations: fresh — skipped")
             else:
                 from pipeline import relations
 
-                relations.run(model=config.RELATION_MODEL)
+                relations.run(
+                    model=config.RELATION_MODEL,
+                    entity_cache=paths.entity,
+                    resolved_cache=paths.resolved,
+                    cache_path=paths.relations,
+                )
 
         elif name == "upload":
             if args.skip_upload:
                 print("[upload] skipped (--skip-upload)")
             else:
-                _run_upload(args)
+                _run_upload(args, paths.base)
 
         print(f"  ({name}: {time.monotonic() - start:.1f}s)")
 
