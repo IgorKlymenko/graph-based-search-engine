@@ -28,24 +28,13 @@ from openai import AsyncOpenAI
 
 load_dotenv()
 
-_SEARCH_METHODS = ["ppr", "fast-dual"]
-
-
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("query", help="Natural-language question to answer")
     p.add_argument("--group-id", default="testing-1",
                    help="Graph partition to search (default: testing-1)")
-    p.add_argument("--search-method", default="ppr", choices=_SEARCH_METHODS,
-                   help="Retrieval method: 'ppr' (single-hop, fast) or 'fast-dual' (multi-hop, uses LLM bridge). Default: ppr")
     p.add_argument("--top-nodes", default=15, type=int,
-                   help="[ppr] How many top PPR entity nodes to collect sources from (default: 15)")
-    p.add_argument("--max-hops", default=4, type=int,
-                   help="[fast-dual] Max reasoning hops (default: 4)")
-    p.add_argument("--min-relevance", default=0.20, type=float,
-                   help="[fast-dual] Min cosine for fact rerank "
-                        "(text-embedding-3-small space). Lower = more facts. "
-                        "Default: 0.20")
+                   help="How many top PPR entity nodes to collect sources from (default: 15)")
     p.add_argument("--max-files", default=8, type=int,
                    help="Max source files to pass to the LLM (default: 8)")
     p.add_argument("--model", default="gpt-4.1-mini",
@@ -198,114 +187,6 @@ async def collect_sources(
     return [file_meta[f] for f in ranked]
 
 
-# ── fast-dual path ────────────────────────────────────────────────────────────
-
-_EPISODES_BY_UUID_QUERY = """
-MATCH (ep:Episode)
-WHERE ep.uuid IN $episode_uuids OR ep.doc_id IN $episode_uuids
-RETURN ep.uuid AS uuid, ep.source_file AS source_file, ep.source AS obsidian_uri, ep.name AS episode_name
-"""
-
-
-async def run_fast_dual(
-    query: str,
-    group_id: str,
-    max_hops: int,
-    max_files: int,
-    llm_model: str,
-    min_relevance: float,
-) -> list[dict]:
-    """Run fast-dual via the arena runner and return ranked source file dicts."""
-    from arena.runner import ArenaArgs, run_fast_sequential_dual
-    from arena.tracker import TokenTracker
-    from services.neo4j import Neo4jGraphDriver
-    from services.openai import OpenAIEmbedder, OpenAILLMClient
-
-    driver   = Neo4jGraphDriver.from_env()
-    # Seeds against entity name_embedding — same model as graph_upload.py
-    embedder = OpenAIEmbedder(QUERY_EMBED_MODEL)
-    # Previous seed embedder: local e5-base-v2 (768-dim)
-    # from services.e5 import E5Embedder
-    # embedder = E5Embedder()
-    # Facts are embedded at upload with OpenAI text-embedding-3-small (1536-dim);
-    # the query must be embedded in that same space to rerank them (graph_upload.py).
-    rerank_embedder = OpenAIEmbedder()
-    llm      = OpenAILLMClient()
-    tracker  = TokenTracker()
-
-    args = ArenaArgs(
-        max_hops=max_hops,
-        llm_model=llm_model,
-        generate=False,  # we do our own generation
-        fact_min_relevance=min_relevance,
-    )
-
-    print(f"Running fast-dual (max_hops={max_hops})...")
-    result = await run_fast_sequential_dual(
-        driver, embedder, llm, query, group_id, args, tracker,
-        rerank_embedder=rerank_embedder,
-    )
-
-    if result.error:
-        print(f"fast-dual error: {result.error}")
-        return []
-
-    # Print top facts so the user can see what was retrieved
-    print(f"  {len(result.facts)} facts retrieved:")
-    for fact in result.facts[:8]:
-        print(f"    [{fact.score:.3f}] {fact.fact[:100]}")
-    if len(result.facts) > 8:
-        print(f"    … and {len(result.facts) - 8} more")
-    print()
-
-    # Collect all episode UUIDs from the returned facts
-    episode_uuids: list[str] = []
-    for fact in result.facts:
-        episode_uuids.extend(fact.episodes)
-
-    unique_ep_uuids = list(dict.fromkeys(episode_uuids))  # preserve order, dedupe
-    print(f"  spanning {len(unique_ep_uuids)} episodes")
-
-    if not unique_ep_uuids:
-        return []
-
-    # Resolve episode UUIDs → source files
-    ep_rows = await neo4j_query(_EPISODES_BY_UUID_QUERY, episode_uuids=unique_ep_uuids)
-    # uuid → {source_file, obsidian_uri, episode_name}
-    ep_lookup: dict[str, dict] = {
-        r["uuid"]: {
-            "source_file": r["source_file"],
-            "obsidian_uri": r.get("obsidian_uri", ""),
-            "episode_name": r.get("episode_name") or r["uuid"][:8],
-        }
-        for r in ep_rows if r.get("source_file")
-    }
-
-    # Rank files: each fact contributes 1 hit per unique source file it references
-    file_hits: dict[str, int] = {}
-    file_meta: dict[str, dict] = {}
-    for fact in result.facts:
-        seen: set[str] = set()
-        for ep_uuid in fact.episodes:
-            ep = ep_lookup.get(ep_uuid)
-            if ep and ep["source_file"] not in seen:
-                seen.add(ep["source_file"])
-                sf = ep["source_file"]
-                file_hits[sf] = file_hits.get(sf, 0) + 1
-                meta = file_meta.setdefault(
-                    sf, {"source_file": sf, "obsidian_uri": ep["obsidian_uri"], "episodes": []}
-                )
-                if ep["episode_name"] not in meta["episodes"]:
-                    meta["episodes"].append(ep["episode_name"])
-
-    ranked = sorted(file_hits, key=lambda f: -file_hits[f])[:max_files]
-
-    cost = result.cost.total_usd
-    print(f"  fast-dual cost: ${cost:.4f}  stop={result.stop_reason}")
-
-    return [file_meta[f] for f in ranked]
-
-
 def read_file(path: str) -> str:
     try:
         return Path(path).read_text(encoding="utf-8", errors="ignore")
@@ -383,59 +264,47 @@ async def main() -> None:
 
     print(f"Query:    {args.query!r}")
     print(f"Group ID: {args.group_id}")
-    print(f"Method:   {args.search_method}")
     print()
 
-    if args.search_method == "fast-dual":
-        sources = await run_fast_dual(
-            args.query,
-            args.group_id,
-            max_hops=args.max_hops,
-            max_files=args.max_files,
-            llm_model=args.model,
-            min_relevance=args.min_relevance,
-        )
-    else:
-        # ppr path
-        print(f"Embedding query ({QUERY_EMBED_MODEL})...")
-        embedding = embed_query(args.query)
+    print(f"Embedding query ({QUERY_EMBED_MODEL})...")
+    embedding = embed_query(args.query)
 
-        print("Seeding entity nodes...")
-        seed_rows = await neo4j_query(
-            _VECTOR_SEED_QUERY,
-            group_id=args.group_id,
-            embedding=embedding,
-            limit=20,
-        )
-        if not seed_rows:
-            print("No seed entities found — is the graph uploaded? Is group_id correct?")
-            sys.exit(1)
+    print("Seeding entity nodes...")
+    seed_rows = await neo4j_query(
+        _VECTOR_SEED_QUERY,
+        group_id=args.group_id,
+        embedding=embedding,
+        limit=20,
+    )
+    if not seed_rows:
+        print("No seed entities found — is the graph uploaded? Is group_id correct?")
+        sys.exit(1)
 
-        seed_weights = {r["uuid"]: float(r["score"]) for r in seed_rows}
-        print(f"  {len(seed_weights)} seed entities:")
-        for r in seed_rows[:5]:
-            print(f"    [{r['score']:.3f}] {r['name']}")
-        if len(seed_rows) > 5:
-            print(f"    … and {len(seed_rows) - 5} more")
-        print()
+    seed_weights = {r["uuid"]: float(r["score"]) for r in seed_rows}
+    print(f"  {len(seed_weights)} seed entities:")
+    for r in seed_rows[:5]:
+        print(f"    [{r['score']:.3f}] {r['name']}")
+    if len(seed_rows) > 5:
+        print(f"    … and {len(seed_rows) - 5} more")
+    print()
 
-        print(f"Running PPR (top {args.top_nodes} nodes)...")
-        top_entity_uuids = await run_ppr(args.group_id, seed_weights, args.top_nodes)
-        # Fetch names for display
-        name_rows = await neo4j_query(
-            "MATCH (n:Entity) WHERE n.uuid IN $uuids RETURN n.uuid AS uuid, n.name AS name",
-            uuids=top_entity_uuids,
-        )
-        uuid_to_name = {r["uuid"]: r["name"] for r in name_rows}
-        print(f"  {len(top_entity_uuids)} top entities:")
-        for uid in top_entity_uuids[:10]:
-            print(f"    {uuid_to_name.get(uid, uid[:8] + '…')}")
-        if len(top_entity_uuids) > 10:
-            print(f"    … and {len(top_entity_uuids) - 10} more")
-        print()
+    print(f"Running PPR (top {args.top_nodes} nodes)...")
+    top_entity_uuids = await run_ppr(args.group_id, seed_weights, args.top_nodes)
+    # Fetch names for display
+    name_rows = await neo4j_query(
+        "MATCH (n:Entity) WHERE n.uuid IN $uuids RETURN n.uuid AS uuid, n.name AS name",
+        uuids=top_entity_uuids,
+    )
+    uuid_to_name = {r["uuid"]: r["name"] for r in name_rows}
+    print(f"  {len(top_entity_uuids)} top entities:")
+    for uid in top_entity_uuids[:10]:
+        print(f"    {uuid_to_name.get(uid, uid[:8] + '…')}")
+    if len(top_entity_uuids) > 10:
+        print(f"    … and {len(top_entity_uuids) - 10} more")
+    print()
 
-        print(f"Collecting source files (max {args.max_files})...")
-        sources = await collect_sources(top_entity_uuids, args.group_id, args.max_files)
+    print(f"Collecting source files (max {args.max_files})...")
+    sources = await collect_sources(top_entity_uuids, args.group_id, args.max_files)
 
     if not sources:
         print("No source files found.")

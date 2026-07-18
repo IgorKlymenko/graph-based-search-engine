@@ -11,7 +11,7 @@ from click.testing import CliRunner
 
 from arena.cli import cli
 from arena.tracker import CostBreakdown, MethodResult, StageTimings, TokenUsage
-from tests.arena.conftest import make_method_result
+from tests.conftest import make_method_result
 
 
 def _runner() -> CliRunner:

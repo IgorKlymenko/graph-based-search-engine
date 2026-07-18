@@ -10,7 +10,7 @@ from rich.console import Console
 from arena.display import render_markdown, strip_rich_markup, summary_table
 from arena.duel import fact_diff, render as duel_render
 from arena.report import to_json
-from tests.arena.conftest import make_fact, make_method_result
+from tests.conftest import make_fact, make_method_result
 
 
 def _console_capture() -> tuple[Console, StringIO]:

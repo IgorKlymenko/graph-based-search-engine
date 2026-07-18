@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "arena"
+version = "0.1.0"
+description = "Retrieval/model comparison arena (experimental). Depends one-way on the server's self-contained `retrieval` package."
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.4.2",
+    "rich>=15.0.0",
+    "retrieval",
+]
+
+[project.scripts]
+arena = "arena.cli:main"
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "anyio>=4.0",
+]
+
+# arena imports `retrieval.*`; pull it from the sibling server project in place.
+[tool.uv.sources]
+retrieval = { path = "../server", editable = true }
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]

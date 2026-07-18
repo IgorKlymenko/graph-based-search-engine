@@ -11,6 +11,7 @@ __pycache__/
 .venv/
 .pytest_cache/
 .ruff_cache/
+artifacts/
 
 # Pipeline artifacts (regenerated; can be large binaries)
 entity_cache.json

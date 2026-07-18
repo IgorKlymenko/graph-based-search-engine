@@ -26,9 +26,6 @@ dependencies = [
     "mcp>=1.28.1",
 ]
 
-[project.scripts]
-arena = "arena.cli:main"
-
 [project.optional-dependencies]
 test = [
     "pytest>=8.0",
