@@ -58,6 +58,49 @@ def complete_json_schema(
     return json.loads(response.choices[0].message.content or "{}")
 
 
+def complete_json_schema_image(
+    *,
+    system: str,
+    user: str,
+    image_url: str,
+    schema: dict[str, Any],
+    schema_name: str,
+    model: str,
+    temperature: float = 0.0,
+    timeout: float = 90.0,
+    max_retries: int = 2,
+) -> dict[str, Any]:
+    """Vision variant of :func:`complete_json_schema`; returns parsed JSON.
+
+    ``image_url`` is fetched by the OpenAI API, so it must be publicly
+    reachable. Thread-safe, like the shared client it uses.
+    """
+    client = get_sync_client().with_options(timeout=timeout, max_retries=max_retries)
+    response = client.chat.completions.create(
+        model=model,
+        temperature=temperature,
+        messages=[
+            {"role": "system", "content": system},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user},
+                    {"type": "image_url", "image_url": {"url": image_url}},
+                ],
+            },
+        ],
+        response_format={
+            "type": "json_schema",
+            "json_schema": {
+                "name": schema_name,
+                "strict": True,
+                "schema": schema,
+            },
+        },
+    )
+    return json.loads(response.choices[0].message.content or "{}")
+
+
 class OpenAILLMClient:
     """LLMClient backed by the OpenAI Chat Completions API."""
 

@@ -73,6 +73,11 @@ ENTITY_EMBED_DIMS  = 3072
 FACT_EMBED_MODEL = "text-embedding-3-small"
 FACT_EMBED_DIMS  = 1536
 EMBED_BATCH      = 200
+WRITE_BATCH      = 500
+# The upload runs last, after hours of extraction, so give the clients a long
+# window to ride out a transient failure rather than losing that work.
+NEO4J_MAX_RETRY_TIME = 120.0
+OPENAI_MAX_RETRIES   = 6
 
 _UUID_NS = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
 NOW_ISO  = datetime.now(timezone.utc).isoformat()
@@ -232,11 +237,15 @@ async def upload_saga(
     saga_uuid = stable_uuid(f"saga:{saga_name}")
     print(f"\n[1/6] Saga: {saga_name!r}  group_id={group_id!r}  uuid={saga_uuid[:8]}…")
     if not dry_run:
-        await session.run(
-            _MERGE_SAGA,
-            uuid=saga_uuid, name=saga_name,
-            group_id=group_id, created_at=NOW_ISO,
-        )
+        async def _tx(tx):
+            result = await tx.run(
+                _MERGE_SAGA,
+                uuid=saga_uuid, name=saga_name,
+                group_id=group_id, created_at=NOW_ISO,
+            )
+            await result.consume()
+
+        await session.execute_write(_tx)  # retried, like the batched writes
     return saga_uuid
 
 
@@ -264,6 +273,30 @@ def obsidian_uri(source_file: str, vault_path: Path, vault_name: str) -> str:
         rel = Path(source_file).name  # type: ignore[assignment]
     encoded = quote(str(rel).replace("\\", "/"), safe="/")
     return f"obsidian://open?vault={quote(vault_name)}&file={encoded}"
+
+
+# ── batched writes ────────────────────────────────────────────────────────────
+
+async def _consume_batch(tx, query: str, rows: list[dict]):
+    """Run one batch inside a managed transaction and return its summary."""
+    result = await tx.run(query, rows=rows)
+    return await result.consume()
+
+
+async def _run_batched(session, query: str, rows: list[dict]) -> list:
+    """Write ``rows`` in batches, retrying transient failures. Returns summaries.
+
+    ``session.run`` does not retry, so a brief Aura hiccup would abort an upload
+    that only begins after hours of extraction. ``execute_write`` replays the
+    batch on TransientError/ServiceUnavailable/SessionExpired and re-acquires a
+    connection; every query routed through here is a MERGE, so replaying a batch
+    is idempotent.
+    """
+    summaries = []
+    for i in range(0, len(rows), WRITE_BATCH):
+        batch = rows[i : i + WRITE_BATCH]
+        summaries.append(await session.execute_write(_consume_batch, query, batch))
+    return summaries
 
 
 # ── 2. Episodes ───────────────────────────────────────────────────────────────
@@ -320,9 +353,7 @@ async def upload_episodes(
             print(f"  [dry-run] {r['uuid'][:8]}…  {r['name']!r}")
         return {k: v["uuid"] for k, v in seen.items()}
 
-    for i in range(0, len(rows), 500):
-        result = await session.run(_MERGE_EPISODE, rows=rows[i : i + 500])
-        await result.consume()
+    await _run_batched(session, _MERGE_EPISODE, rows)
     print(f"  {len(rows)} done")
     return {k: v["uuid"] for k, v in seen.items()}
 
@@ -379,9 +410,7 @@ async def upload_entities(
         return canonical_to_uuid
 
     created = props = 0
-    for i in range(0, len(rows), 500):
-        result = await session.run(_MERGE_ENTITY, rows=rows[i : i + 500])
-        s = await result.consume()
+    for s in await _run_batched(session, _MERGE_ENTITY, rows):
         created += s.counters.nodes_created
         props   += s.counters.properties_set
     print(f"  created={created}  properties_set={props}")
@@ -426,9 +455,7 @@ async def upload_mentions(
         return
 
     created = 0
-    for i in range(0, len(rows), 500):
-        result = await session.run(_MERGE_MENTIONS, rows=rows[i : i + 500])
-        s = await result.consume()
+    for s in await _run_batched(session, _MERGE_MENTIONS, rows):
         created += s.counters.relationships_created
     print(f"  created={created}")
 
@@ -512,9 +539,7 @@ async def upload_relations(
         return
 
     created = props = 0
-    for i in range(0, len(rows), 500):
-        result = await session.run(_MERGE_RELATES_TO, rows=rows[i : i + 500])
-        s = await result.consume()
+    for s in await _run_batched(session, _MERGE_RELATES_TO, rows):
         created += s.counters.relationships_created
         props   += s.counters.properties_set
     print(f"  created={created}  properties_set={props}")
@@ -590,9 +615,7 @@ async def upload_node_facts(
         return
 
     created = 0
-    for i in range(0, len(rows), 500):
-        result = await session.run(_MERGE_FACT, rows=rows[i : i + 500])
-        s = await result.consume()
+    for s in await _run_batched(session, _MERGE_FACT, rows):
         created += s.counters.nodes_created
     print(f"  fact nodes created={created}")
 
@@ -651,7 +674,9 @@ async def main() -> None:
         edge_embeddings   = [empty] * len(edges)
         nfact_embeddings  = [empty] * len(node_facts)
     else:
-        oai = AsyncOpenAI()
+        # Embeddings run at the end of a multi-hour pipeline; ride out a blip
+        # rather than lose that work to the SDK's default of 2 attempts.
+        oai = AsyncOpenAI(max_retries=OPENAI_MAX_RETRIES)
         print(f"\nEmbedding entity names ({ENTITY_EMBED_MODEL})...")
         name_embeddings = await embed_all(
             oai, [e["canonical"] for e in entities], "entity names",
@@ -699,7 +724,11 @@ async def main() -> None:
         _print_gaps()
         return
 
-    driver = AsyncGraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_pass))
+    driver = AsyncGraphDatabase.driver(
+        neo4j_uri,
+        auth=(neo4j_user, neo4j_pass),
+        max_transaction_retry_time=NEO4J_MAX_RETRY_TIME,
+    )
     try:
         async with driver.session(database=neo4j_db) as session:
             s_uuid   = await upload_saga(session, saga, group_id, dry_run=False)
