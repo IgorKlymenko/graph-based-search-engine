@@ -1,0 +1,41 @@
+_metadata:
+  major_version: 1
+  minor_version: 1
+
+display_information:
+  name: Nazar
+  description: Your friend Nazar. Good friend. Nazar
+  background_color: "#1a1a1a"
+
+features:
+  bot_user:
+    display_name: Nazar
+    always_online: true
+  app_home:
+    home_tab_enabled: false
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
+
+oauth_config:
+  redirect_urls:
+    - https://extras-chevron-banish.ngrok-free.dev/slack/oauth/callback
+  scopes:
+    bot:
+      - app_mentions:read
+      - chat:write
+      - chat:write.public
+      - users:read
+      - im:history
+
+settings:
+  event_subscriptions:
+    request_url: https://extras-chevron-banish.ngrok-free.dev/slack/event
+    bot_events:
+      - app_mention
+      - app_home_opened
+      - message.im
+  interactivity:
+    is_enabled: false
+  org_deploy_enabled: true
+  socket_mode_enabled: false
+  token_rotation_enabled: false
