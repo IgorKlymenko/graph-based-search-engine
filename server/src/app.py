@@ -11,11 +11,12 @@ Run:
     VERIFY_TIMESTAMP=true         # set false only while replaying via ngrok
 """
 
-import hashlib
-import hmac
+from src.security.slack import slack_sign
 import json
 import os
 import time
+import hmac
+from datetime import datetime
 
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
@@ -24,7 +25,6 @@ from slack_sdk import WebClient
 
 load_dotenv()
 
-SIGNING_SECRET = os.environ["SLACK_SIGNING_SECRET"].encode()
 BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
 VERIFY_TIMESTAMP = os.environ.get("VERIFY_TIMESTAMP", "true").lower() == "true"
 
@@ -38,6 +38,7 @@ _seen_event_ids: set[str] = set()
 
 def verify_signature(headers, raw: bytes) -> None:
     """Slack signs the RAW bytes. Never re-serialize the JSON before hashing."""
+    signing_secret = os.environ["SLACK_SIGNING_SECRET"].encode()
     timestamp = headers.get("X-Slack-Request-Timestamp", "")
     signature = headers.get("X-Slack-Signature", "")
 
@@ -46,11 +47,15 @@ def verify_signature(headers, raw: bytes) -> None:
 
     # Replay guard. ngrok's Replay button resends the ORIGINAL timestamp,
     # so this will reject replayed requests — hence the env flag.
-    if VERIFY_TIMESTAMP and abs(time.time() - int(timestamp)) > 60 * 5:
+    try:
+        timestamp_age = abs(time.time() - int(timestamp))
+    except ValueError:
+        raise HTTPException(status_code=401, detail="invalid timestamp")
+
+    if VERIFY_TIMESTAMP and timestamp_age > 60 * 5:
         raise HTTPException(status_code=401, detail="stale timestamp")
 
-    basestring = b"v0:" + timestamp.encode() + b":" + raw
-    expected = "v0=" + hmac.new(SIGNING_SECRET, basestring, hashlib.sha256).hexdigest()
+    _, expected = slack_sign(raw, signing_secret, timestamp)
 
     if not hmac.compare_digest(expected, signature):
         raise HTTPException(status_code=401, detail="bad signature")
@@ -68,9 +73,10 @@ async def slack_event(request: Request, background: BackgroundTasks):
 
     # 2. Slack retried a delivery we already have. ACK, do nothing.
     event_id = payload.get("event_id")
-    if event_id in _seen_event_ids:
-        return JSONResponse({})
-    _seen_event_ids.add(event_id)
+    if event_id is not None:
+        if event_id in _seen_event_ids:
+            return JSONResponse({})
+        _seen_event_ids.add(event_id)
 
     event = payload.get("event", {})
 
@@ -97,7 +103,7 @@ def handle_event(event: dict) -> None:
     )
 
 
-@app.get("/healthz")
-def healthz():
+@app.get("/health")
+def health():
     """Cheap and unauthenticated. Never hang graph loading off this."""
     return {"ok": True}
