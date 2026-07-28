@@ -7,7 +7,7 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "slack-sdk>=3.43.0",
     "uvicorn>=0.51.0",
-    "pydantic-settings"
+    "pydantic-settings",
 ]
 
 [dependency-groups]
