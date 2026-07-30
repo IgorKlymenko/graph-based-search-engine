@@ -16,22 +16,22 @@ RESOLVED_CACHE = Path("resolved_entities.json")
 ENTITY_VECTOR_CACHE = Path("resolved_entity_vectors.npz")
 RELATIONS_CACHE = Path("relations_cache.json")
 
-# ── stage 1: mention extraction ────────────────────────────────────────────────
+# ── stage 1: candidate extraction ────────────────────────────────────────────────
 EXTRACTION_MODEL = "gpt-4.1-mini"
 ENABLE_GLEANING = True
-CHUNK_MAX_CHARS = 1000
+EPISODE_MAX_CHARS = 1000
 FILE_WORKERS = 4
 EPISODE_WORKERS = 8
 
-# ── stage 2: mention embedding (mxbai span-pool, symmetric) ────────────────────
-MENTION_EMBED_MODEL = "mixedbread-ai/mxbai-embed-large-v1"
+# ── stage 2: concept embedding (mxbai span-pool, symmetric) ────────────────────
+CANDIDATE_EMBED_MODEL = "mixedbread-ai/mxbai-embed-large-v1"
 EMBED_BATCH_SIZE = 16
 EMBED_MAX_TOKENS = 512
 CHARS_PER_TOKEN = 4
 EMBED_SAVE_EVERY = 10  # checkpoint every N batches
 
 # ── stage 3: clustering (HDBSCAN) ──────────────────────────────────────────────
-HDBSCAN_MIN_CLUSTER_SIZE = 5
+HDBSCAN_MIN_CLUSTER_SIZE = 2
 HDBSCAN_MIN_SAMPLES = 2
 HDBSCAN_METRIC = "cosine"
 

@@ -37,6 +37,8 @@ cross-tenant analytics becomes a product requirement.
 
 ---
 
+
+
 ### 2. PPR runs in application memory over a CSR snapshot — *Accepted*
 
 **Context.** Iterative PPR inside Postgres (driver loop or recursive CTE) is
@@ -61,6 +63,8 @@ measurement saying otherwise.
 
 ---
 
+
+
 ### 3. CSR snapshots are built at ingestion and stored as immutable blobs — *Accepted*
 
 **Context.** The serving path runs on scale-to-zero instances. A cache built at
@@ -84,6 +88,8 @@ is harmless and cleanable.
 
 ---
 
+
+
 ### 4. `graph_version` is the cache-invalidation signal, bumped in-transaction — *Accepted*
 
 **Decision.** Ingestion bumps a per-tenant version counter in the *same
@@ -101,6 +107,8 @@ comparison is the guarantee. Any query path must be able to load the blob
 itself.
 
 ---
+
+
 
 ### 5. `graphs` is a snapshot pointer table, not a container — *Accepted*
 
@@ -121,7 +129,11 @@ resolve an older version, and retention becomes an explicit delete.
 
 ---
 
+
+
 ## Slack request path
+
+
 
 ### 6. Two-exchange Slack shape: ACK fast, answer later — *Accepted*
 
@@ -136,6 +148,8 @@ delivered later as a **new outbound request** to Slack's Web API
 rather than hygiene.
 
 ---
+
+
 
 ### 7. Cloud Tasks carries post-ACK work — *Accepted*
 
@@ -156,6 +170,8 @@ check "already answered?" before posting, or a redelivered task double-posts.
 
 ---
 
+
+
 ### 8. Signature verification and dedupe happen before any work — *Accepted*
 
 **Decision.** `/event` verifies Slack's HMAC over `v0:{timestamp}:{raw_body}`
@@ -173,6 +189,8 @@ changes the signature.
 
 ---
 
+
+
 ### 9. Scale-to-zero, with `min-instances=1` as a reversible knob — *Accepted*
 
 **Decision.** Run scale-to-zero. `min-instances=1` may be enabled later for
@@ -188,6 +206,8 @@ imported lazily inside the functions that need them, keeping the ACK path's
 import graph small.
 
 ---
+
+
 
 ### 10. Typing-based warmup was rejected — *Superseded / not viable*
 
@@ -209,7 +229,11 @@ later, `assistant_thread_started` is a legitimate pre-question signal.
 
 ---
 
+
+
 ## Identity & tenancy
+
+
 
 ### 11. `users` has its own primary key; `auth_user_id` is a nullable link — *Accepted*
 
@@ -231,6 +255,8 @@ to both.
 
 ---
 
+
+
 ### 12. Memberships are a bridge table, not a column on users — *Accepted*
 
 **Decision.** `memberships(user_id, tenant_id, role)` with
@@ -248,6 +274,8 @@ be an owner in one tenant and a member in another.
 `WHERE user_id = ...`, the hottest lookup in the database.
 
 ---
+
+
 
 ### 13. Email is the account-merge key, with a recorded source — *Accepted*
 
@@ -268,6 +296,8 @@ justified because Slack-only users have no `auth.users` row. On conflict,
 `auth.users` wins for anyone with `auth_user_id` set.
 
 ---
+
+
 
 ### 14. Just-in-time provisioning of Slack users — *Accepted*
 
@@ -291,6 +321,8 @@ first messages race.
 
 ---
 
+
+
 ### 15. Slack identity is workspace-scoped — *Accepted*
 
 **Decision.** `slack_users` has composite primary key
@@ -300,6 +332,8 @@ first messages race.
 workspaces has two Slack IDs and gets two rows pointing at one `user_id`.
 
 ---
+
+
 
 ### 16. Bot tokens live in a secret manager; only a reference is stored — *Accepted*
 
@@ -321,6 +355,8 @@ payload's `team_id`.
 
 ---
 
+
+
 ### 17. Uninstall is soft — *Accepted*
 
 **Decision.** `slack_teams.uninstalled_at` marks removal rather than deleting
@@ -333,15 +369,18 @@ Alternative if full install history is wanted: surrogate PK plus
 
 ---
 
+
+
 ## Access control
+
+
 
 ### 18. Tenant isolation is a restrictive wall; business rules are permissive doors — *Accepted*
 
-**Decision.** Every tenant-scoped table gets `ENABLE` **and** `FORCE ROW LEVEL
-SECURITY`, a restrictive policy testing tenant membership, and permissive
+**Decision.** Every tenant-scoped table gets `ENABLE` **and** `FORCE ROW LEVEL SECURITY`, a restrictive policy testing tenant membership, and permissive
 policies for business rules.
 
-**Why `FORCE`.** Table owners bypass RLS by default. Migrations and any
+**Why** `FORCE`**.** Table owners bypass RLS by default. Migrations and any
 owner-privileged path would sail through, and isolation tests would pass while
 enforcing nothing.
 
@@ -354,6 +393,8 @@ disaster: it becomes another door.
 access and never creates it — a policy on a table with no grant is inert.
 
 ---
+
+
 
 ### 19. RBAC now; groups, spaces, and per-resource grants deferred — *Accepted / Deferred*
 
@@ -378,30 +419,36 @@ attachment point. Adding a nullable column later is easy; retrofitting the
 
 ---
 
+
+
 ### 20. Permission-aware retrieval is an open problem — *Open*
 
 **Identified, not resolved.** Once content permissions exist, three enforcement
 gaps appear that no RLS policy closes:
 
 - **Derived data.** Entities, edges, facts, and embeddings derived from a
-  restricted document must inherit its restriction. Each derived artifact needs
-  a pointer back to its sources, and multi-source facts need a stated rule —
-  most-restrictive-wins is the defensible default.
+restricted document must inherit its restriction. Each derived artifact needs
+a pointer back to its sources, and multi-source facts need a stated rule —
+most-restrictive-wins is the defensible default.
 - **The CSR snapshot is tenant-wide.** PPR walks it with no notion of who is
-  asking. Post-filtering results leaks through scoring (restricted nodes still
-  propagate mass); pre-filtering means the cache key becomes
-  `(tenant, permission set)`, changing the caching economics; filtering during
-  the walk puts an authorization lookup in the hot loop.
+asking. Post-filtering results leaks through scoring (restricted nodes still
+propagate mass); pre-filtering means the cache key becomes
+`(tenant, permission set)`, changing the caching economics; filtering during
+the walk puts an authorization lookup in the hot loop.
 - **The prompt is the last boundary.** Anything placed in the context window
-  can appear in the answer, so the enrichment query is the real enforcement
-  point.
+can appear in the answer, so the enrichment query is the real enforcement
+point.
 
 **Current position.** Enforce hard at the enrichment query; accept the scoring
 leak knowingly and document it.
 
 ---
 
+
+
 ## Conventions
+
+
 
 ### 21. `text` with check constraints, never `varchar(n)` — *Accepted*
 
@@ -437,14 +484,19 @@ that is when prod becomes precious and migrations start meeting lived-in data.
 
 ---
 
+
+
 ## Open items
 
-| Item | Note |
-|---|---|
-| `facts` table and source bridges | Enrichment returns facts with attribution; reified facts are what make answers explicable and permission-checkable. Not yet in the schema. |
-| `documents`, `node_sources` | Document↔node is many-to-many and needs a bridge — permission propagation travels along it. |
-| `events` table shape | Dedupe minimum is `(slack_event_id PK, received_at)`. Worth adding `payload jsonb` (replay), `status`/`responded_at` (idempotency at `/work`), `error`. `tenant_id` must be nullable — it is resolved in `/work`, not at ACK time. Needs a retention rule. Consider an `internal` schema so it is never API-exposed. |
-| Composite-FK tenant pinning | `(id, tenant_id)` unique on parents, children referencing both columns, so cross-tenant references are unrepresentable. Not yet applied. |
-| Bi-temporal columns and constraints | `valid_at`/`invalid_at`/`created_at`/`expired_at` on edges and facts, with a check that validity ordering holds and an exclusion constraint against overlapping intervals per fact. |
-| Blob storage location | Object storage co-located with compute is faster for a latency-path download; single-vendor is operationally simpler. Measure a 20 MB cross-cloud fetch before committing. |
-| Subscription history | Currently modelled one-to-one with tenants. One-to-many with a status column preserves trial→paid→churn history. |
+
+| Item                                | Note                                                                                                                                                                                                                                                                                                                 |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `facts` table and source bridges    | Enrichment returns facts with attribution; reified facts are what make answers explicable and permission-checkable. Not yet in the schema.                                                                                                                                                                           |
+| `documents`, `node_sources`         | Document↔node is many-to-many and needs a bridge — permission propagation travels along it.                                                                                                                                                                                                                          |
+| `events` table shape                | Dedupe minimum is `(slack_event_id PK, received_at)`. Worth adding `payload jsonb` (replay), `status`/`responded_at` (idempotency at `/work`), `error`. `tenant_id` must be nullable — it is resolved in `/work`, not at ACK time. Needs a retention rule. Consider an `internal` schema so it is never API-exposed. |
+| Composite-FK tenant pinning         | `(id, tenant_id)` unique on parents, children referencing both columns, so cross-tenant references are unrepresentable. Not yet applied.                                                                                                                                                                             |
+| Bi-temporal columns and constraints | `valid_at`/`invalid_at`/`created_at`/`expired_at` on edges and facts, with a check that validity ordering holds and an exclusion constraint against overlapping intervals per fact.                                                                                                                                  |
+| Blob storage location               | Object storage co-located with compute is faster for a latency-path download; single-vendor is operationally simpler. Measure a 20 MB cross-cloud fetch before committing.                                                                                                                                           |
+| Subscription history                | Currently modelled one-to-one with tenants. One-to-many with a status column preserves trial→paid→churn history.                                                                                                                                                                                                     |
+
+

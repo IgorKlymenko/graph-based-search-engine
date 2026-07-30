@@ -1,6 +1,9 @@
-"""Stage 3 — HDBSCAN clustering of entity surface vectors.
+"""Stage 3 — HDBSCAN clustering of concept vectors.
 
-Density-based clustering with no threshold to tune. Surfaces that fit no dense
+Blocking, not matching: clusters are concept groups for stage 4 to adjudicate,
+so recall matters here and precision is the LLM's job (see resolution.py).
+
+Density-based clustering with no threshold to tune. Concepts that fit no dense
 region are HDBSCAN "noise" (label -1); we treat every noise point as its own
 singleton so the resolution stage sees one coherent partition (spec §8.2). The
 exploratory consensus correlation-clustering code from the notebook is
@@ -25,9 +28,9 @@ def hdbscan_clustering(
     min_samples: int = HDBSCAN_MIN_SAMPLES,
     metric: str = HDBSCAN_METRIC,
 ) -> tuple[list[list[str]], list[str]]:
-    """Cluster ``{surface: vector}``.
+    """Cluster ``{concept: vector}``.
 
-    Returns ``(clusters, noise)`` where every input surface appears in exactly
+    Returns ``(clusters, noise)`` where every input concept appears in exactly
     one multi/size-1 cluster or in ``noise``. ``clusters`` is sorted largest
     first. An empty input yields ``([], [])``.
     """
@@ -35,11 +38,11 @@ def hdbscan_clustering(
 
     from sklearn.cluster import HDBSCAN
 
-    entities = list(vectors)
-    if not entities:
+    concepts = list(vectors)
+    if not concepts:
         return [], []
 
-    matrix = np.array([vectors[e] for e in entities])
+    matrix = np.array([vectors[s] for s in concepts])
     labels = HDBSCAN(
         min_cluster_size=min_cluster_size,
         min_samples=min_samples,
@@ -48,11 +51,11 @@ def hdbscan_clustering(
 
     cluster_map: dict[int, list[str]] = defaultdict(list)
     noise: list[str] = []
-    for entity, label in zip(entities, labels):
+    for concept, label in zip(concepts, labels):
         if label == -1:
-            noise.append(entity)
+            noise.append(concept)
         else:
-            cluster_map[int(label)].append(entity)
+            cluster_map[int(label)].append(concept)
 
     clusters = sorted(cluster_map.values(), key=len, reverse=True)
     return clusters, noise

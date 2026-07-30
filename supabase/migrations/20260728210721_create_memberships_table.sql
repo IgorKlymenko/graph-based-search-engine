@@ -2,7 +2,7 @@ CREATE TABLE public.memberships (
     id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id    uuid NOT NULL REFERENCES public.users(id)   ON DELETE CASCADE,
     tenant_id  uuid NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
-    role       text NOT NULL CHECK (role IN ('owner','admin','member')),
+    role       text NOT NULL DEFAULT 'member' CHECK (role IN ('owner','admin','member')),
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (user_id, tenant_id)

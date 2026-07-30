@@ -27,10 +27,10 @@ Usage:
     uv run python graph_upload.py --skip-embeddings   # schema test only
 
 Reads:
-    entity_cache.json       episode texts + entity mentions per chunk
+    entity_cache.json       episode texts + entity candidates per episode
     resolved_entities.json  canonical entities (name, summary, members)
     relations_cache.json    dict: edges, node_facts, non_facts,
-                            rejected_subjects, uncovered_by_chunk
+                            rejected_subjects, uncovered_by_episode
 
 Env vars (or .env):
     NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, NEO4J_DATABASE
@@ -46,11 +46,14 @@ import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import NamedTuple
 from urllib.parse import quote
 
 from dotenv import load_dotenv
 from neo4j import AsyncGraphDatabase
 from openai import AsyncOpenAI
+
+from pipeline.models import unit_key
 
 load_dotenv()
 
@@ -138,6 +141,42 @@ def load_relations_cache(path: Path) -> tuple[list[dict], list[dict]]:
         "provenance":       "salvaged_unresolved_edge",
     } for e in data if not e.get("object_resolved")]
     return edges, node_facts
+
+
+# ── entity identity ───────────────────────────────────────────────────────────
+
+class EntityLookup(NamedTuple):
+    """Resolve a canonical name to an entity_id, disambiguated by document.
+
+    Relation extraction records endpoints by canonical NAME, but unit-level
+    resolution allows two entities to share a name. Scoping by the edge's doc_id
+    separates them. Known limit: two same-named entities inside ONE document
+    cannot be told apart here and collapse to the first.
+    """
+
+    by_name_doc: dict[tuple[str, str], str]
+    by_name: dict[str, list[str]]
+
+    def get(self, name: str, doc_id: str) -> str | None:
+        eid = self.by_name_doc.get((name, doc_id))
+        if eid is not None:
+            return eid
+        # Not in this document: only fall back when the name is unambiguous.
+        # Guessing among several would silently attach an edge to the wrong
+        # entity, where returning None keeps the loss visible in skipped_map.
+        ids = self.by_name.get(name) or []
+        return ids[0] if len(ids) == 1 else None
+
+
+def build_entity_lookup(entities: list[dict]) -> EntityLookup:
+    by_name_doc: dict[tuple[str, str], str] = {}
+    by_name: dict[str, list[str]] = {}
+    for e in entities:
+        eid = e["entity_id"]
+        by_name.setdefault(e["canonical"], []).append(eid)
+        for source_file in e.get("source_files", []):
+            by_name_doc.setdefault((e["canonical"], source_file), eid)
+    return EntityLookup(by_name_doc, by_name)
 
 
 # ── embeddings ────────────────────────────────────────────────────────────────
@@ -320,16 +359,16 @@ MERGE (s)-[:HAS_EPISODE]->(ep)
 
 async def upload_episodes(
     session: object,
-    mentions: list[dict],
+    candidates: list[dict],
     saga_uuid: str,
     group_id: str,
     vault_path: Path,
     vault_name: str,
     dry_run: bool,
 ) -> dict[str, str]:
-    """Create Episode nodes from entity_cache. Returns {chunk_key: episode_uuid}."""
+    """Create Episode nodes from entity_cache. Returns {episode_key: episode_uuid}."""
     seen: dict[str, dict] = {}
-    for m in mentions:
+    for m in candidates:
         key = f"{m['source_file']}|{m['episode_idx']}"
         if key in seen:
             continue
@@ -378,22 +417,28 @@ async def upload_entities(
     name_embeddings: list[list[float]],
     dry_run: bool,
 ) -> dict[str, str]:
-    """Create Entity nodes. Returns {canonical: entity_uuid}."""
-    canonical_to_uuid: dict[str, str] = {}
+    """Create Entity nodes. Returns {entity_id: entity_uuid}.
+
+    Keyed on the resolver's entity_id rather than the canonical name: resolution
+    works per unit, so two entities may legitimately share a name, and a
+    name-keyed uuid would MERGE them back into one node.
+    """
+    entity_id_to_uuid: dict[str, str] = {}
     rows = []
     for entity, emb in zip(entities, name_embeddings):
         canonical = entity["canonical"]
         reason    = entity.get("reason") or ""
-        members   = entity.get("members", [canonical])
+        aliases   = entity.get("member_candidates") or [canonical]
         if reason:
             summary = reason
-        elif len(members) > 1:
-            summary = f"Also known as: {', '.join(members)}"
+        elif len(aliases) > 1:
+            summary = f"Also known as: {', '.join(aliases)}"
         else:
             summary = canonical
 
-        eid = stable_uuid(f"entity:{canonical}")
-        canonical_to_uuid[canonical] = eid
+        entity_id = entity["entity_id"]
+        eid = stable_uuid(f"entity:{entity_id}")
+        entity_id_to_uuid[entity_id] = eid
         rows.append({
             "uuid":           eid,
             "name":           canonical,
@@ -407,14 +452,14 @@ async def upload_entities(
     if dry_run:
         for r in rows[:2]:
             print(f"  [dry-run] {r['uuid'][:8]}…  {r['name']!r}")
-        return canonical_to_uuid
+        return entity_id_to_uuid
 
     created = props = 0
     for s in await _run_batched(session, _MERGE_ENTITY, rows):
         created += s.counters.nodes_created
         props   += s.counters.properties_set
     print(f"  created={created}  properties_set={props}")
-    return canonical_to_uuid
+    return entity_id_to_uuid
 
 
 # ── 4. MENTIONS (Episode → Entity) ───────────────────────────────────────────
@@ -427,21 +472,22 @@ MERGE (ep)-[:MENTIONS]->(n)
 """
 
 
-async def upload_mentions(
+async def upload_mention_edges(
     session: object,
-    mentions: list[dict],
-    mention_to_canonical: dict[str, str],
-    canonical_to_uuid: dict[str, str],
+    candidates: list[dict],
+    unit_to_entity_id: dict[str, str],
+    entity_id_to_uuid: dict[str, str],
     episode_key_to_uuid: dict[str, str],
     dry_run: bool,
 ) -> None:
     seen: set[tuple[str, str]] = set()
     rows = []
-    for m in mentions:
-        canon   = mention_to_canonical.get(m["text"])
-        en_uuid = canonical_to_uuid.get(canon or "")
+    for m in candidates:
+        # per-unit lookup: this occurrence's entity, not the concept's
+        entity_id = unit_to_entity_id.get(unit_key(m))
+        en_uuid = entity_id_to_uuid.get(entity_id or "")
         ep_uuid = episode_key_to_uuid.get(f"{m['source_file']}|{m['episode_idx']}")
-        if not canon or not en_uuid or not ep_uuid:
+        if not entity_id or not en_uuid or not ep_uuid:
             continue
         pair = (ep_uuid, en_uuid)
         if pair not in seen:
@@ -488,15 +534,16 @@ async def upload_relations(
     session: object,
     edges: list[dict],
     group_id: str,
-    canonical_to_uuid: dict[str, str],
+    lookup: EntityLookup,
+    entity_id_to_uuid: dict[str, str],
     fact_embeddings: list[list[float]],
     ep_uuids: dict[str, str],
     min_confidence: float,
     dry_run: bool,
 ) -> None:
     doc_id_to_ep_uuids: dict[str, list[str]] = {}
-    for chunk_key, ep_uuid in ep_uuids.items():
-        doc_id = chunk_key.split("|")[0]
+    for episode_key, ep_uuid in ep_uuids.items():
+        doc_id = episode_key.split("|")[0]
         doc_id_to_ep_uuids.setdefault(doc_id, []).append(ep_uuid)
 
     rows = []
@@ -505,8 +552,11 @@ async def upload_relations(
         if edge.get("confidence", 1.0) < min_confidence:
             skipped_conf += 1
             continue
-        src_uuid = canonical_to_uuid.get(edge["subject_entity_id"])
-        tgt_uuid = canonical_to_uuid.get(edge["object_entity_id"] or "")
+        doc_id   = edge["doc_id"]
+        src_uuid = entity_id_to_uuid.get(
+            lookup.get(edge["subject_entity_id"], doc_id) or "")
+        tgt_uuid = entity_id_to_uuid.get(
+            lookup.get(edge["object_entity_id"] or "", doc_id) or "")
         if not src_uuid or not tgt_uuid:
             skipped_map += 1
             continue
@@ -570,15 +620,16 @@ async def upload_node_facts(
     session: object,
     node_facts: list[dict],
     group_id: str,
-    canonical_to_uuid: dict[str, str],
+    lookup: EntityLookup,
+    entity_id_to_uuid: dict[str, str],
     fact_embeddings: list[list[float]],
     ep_uuids: dict[str, str],
     min_confidence: float,
     dry_run: bool,
 ) -> None:
     doc_id_to_ep_uuids: dict[str, list[str]] = {}
-    for chunk_key, ep_uuid in ep_uuids.items():
-        doc_id = chunk_key.split("|")[0]
+    for episode_key, ep_uuid in ep_uuids.items():
+        doc_id = episode_key.split("|")[0]
         doc_id_to_ep_uuids.setdefault(doc_id, []).append(ep_uuid)
 
     rows = []
@@ -587,7 +638,8 @@ async def upload_node_facts(
         if nf.get("confidence", 1.0) < min_confidence:
             skipped_conf += 1
             continue
-        en_uuid = canonical_to_uuid.get(nf["entity_id"])
+        en_uuid = entity_id_to_uuid.get(
+            lookup.get(nf["entity_id"], nf["doc_id"]) or "")
         if not en_uuid:
             skipped_map += 1
             continue
@@ -632,16 +684,20 @@ async def main() -> None:
         if not path.exists():
             sys.exit(f"missing cache: {path}")
 
-    mentions          = json.loads(entity_cache.read_text())["mentions"]
+    candidates        = json.loads(entity_cache.read_text())["candidates"]
     resolved_data     = json.loads(resolved_cache.read_text())
     entities          = resolved_data["entities"]
-    mention_to_canon  = resolved_data["mention_to_canonical"]
     edges, node_facts = load_relations_cache(relations_cache)
+    if "unit_to_entity_id" not in resolved_data:
+        sys.exit(f"{resolved_cache} predates unit-level resolution — rerun the "
+                 f"'resolve' stage with --force")
+    unit_to_entity_id = resolved_data["unit_to_entity_id"]
+    lookup            = build_entity_lookup(entities)
 
     group_id = args.group_id
     saga     = args.saga or group_id
 
-    source_files = list({m["source_file"] for m in mentions})
+    source_files = list({m["source_file"] for m in candidates})
     if args.vault_path and args.vault_name:
         vault_path = Path(args.vault_path)
         vault_name = args.vault_name
@@ -659,7 +715,7 @@ async def main() -> None:
     if source_files:
         print(f"URI example: {obsidian_uri(source_files[0], vault_path, vault_name)}")
     print(f"Entities:   {len(entities)}")
-    print(f"Mentions:   {len(mentions)}")
+    print(f"Candidates: {len(candidates)}")
     print(f"Edges:      {len(edges)}")
     print(f"Node-facts: {len(node_facts)}")
     if args.min_confidence > 0:
@@ -712,14 +768,14 @@ async def main() -> None:
     if args.dry_run:
         s_uuid = stable_uuid(f"saga:{saga}")
         print(f"\n[1/6] Saga: {saga!r}  group_id={group_id!r}  uuid={s_uuid[:8]}…")
-        ep_uuids = await upload_episodes(None, mentions, s_uuid, group_id, vault_path, vault_name, dry_run=True)
-        c2u      = await upload_entities(None, entities, group_id, name_embeddings, dry_run=True)
-        await upload_mentions(None, mentions, mention_to_canon, c2u, ep_uuids, dry_run=True)
-        await upload_relations(None, edges, group_id, c2u, edge_embeddings, ep_uuids, args.min_confidence, dry_run=True)
+        ep_uuids = await upload_episodes(None, candidates, s_uuid, group_id, vault_path, vault_name, dry_run=True)
+        e2u      = await upload_entities(None, entities, group_id, name_embeddings, dry_run=True)
+        await upload_mention_edges(None, candidates, unit_to_entity_id, e2u, ep_uuids, dry_run=True)
+        await upload_relations(None, edges, group_id, lookup, e2u, edge_embeddings, ep_uuids, args.min_confidence, dry_run=True)
         if args.skip_facts:
             print("\n[6/6] Fact nodes (HAS_FACT): skipped (--skip-facts)")
         else:
-            await upload_node_facts(None, node_facts, group_id, c2u, nfact_embeddings, ep_uuids, args.min_confidence, dry_run=True)
+            await upload_node_facts(None, node_facts, group_id, lookup, e2u, nfact_embeddings, ep_uuids, args.min_confidence, dry_run=True)
         await create_indexes(None, dry_run=True, skip_facts=args.skip_facts)
         _print_gaps()
         return
@@ -732,12 +788,12 @@ async def main() -> None:
     try:
         async with driver.session(database=neo4j_db) as session:
             s_uuid   = await upload_saga(session, saga, group_id, dry_run=False)
-            ep_uuids = await upload_episodes(session, mentions, s_uuid, group_id, vault_path, vault_name, dry_run=False)
-            c2u      = await upload_entities(session, entities, group_id, name_embeddings, dry_run=False)
-            await upload_mentions(session, mentions, mention_to_canon, c2u, ep_uuids, dry_run=False)
-            await upload_relations(session, edges, group_id, c2u, edge_embeddings, ep_uuids, args.min_confidence, dry_run=False)
+            ep_uuids = await upload_episodes(session, candidates, s_uuid, group_id, vault_path, vault_name, dry_run=False)
+            e2u      = await upload_entities(session, entities, group_id, name_embeddings, dry_run=False)
+            await upload_mention_edges(session, candidates, unit_to_entity_id, e2u, ep_uuids, dry_run=False)
+            await upload_relations(session, edges, group_id, lookup, e2u, edge_embeddings, ep_uuids, args.min_confidence, dry_run=False)
             if not args.skip_facts:
-                await upload_node_facts(session, node_facts, group_id, c2u, nfact_embeddings, ep_uuids, args.min_confidence, dry_run=False)
+                await upload_node_facts(session, node_facts, group_id, lookup, e2u, nfact_embeddings, ep_uuids, args.min_confidence, dry_run=False)
             await create_indexes(session, dry_run=False, skip_facts=args.skip_facts)
     finally:
         await driver.close()
@@ -767,8 +823,8 @@ def _print_gaps() -> None:
 ║     Now that HAS_FACT exists, a summary can be composed from     ║
 ║     an entity's fact set — cheap dedicated pass.                 ║
 ║                                                                  ║
-║  4. UNCOVERED ENTITIES (uncovered_by_chunk in relations cache)   ║
-║     Not yet turned into mention-context fallback facts.          ║
+║  4. UNCOVERED ENTITIES (uncovered_by_episode in relations cache) ║
+║     Not yet turned into candidate-context fallback facts.        ║
 ║     These entities have no facts at all — the last singleton     ║
 ║     residue.                                                     ║
 ║                                                                  ║

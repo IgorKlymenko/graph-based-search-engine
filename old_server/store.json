@@ -1,0 +1,38 @@
+{
+ "files": {
+  "aae47aec-af1c-5c9c-b8e7-3782e99a9f93": {
+   "file_id": "aae47aec-af1c-5c9c-b8e7-3782e99a9f93",
+   "tenant_id": "aaaaaaaa-0000-0000-0000-000000000001",
+   "source": "fs",
+   "external_id": "notes/provisioning.md",
+   "full_text_hash": "44556ab18c1ea82f0201b8c82d2644e5f382089b",
+   "render_version": 1,
+   "episode_ids": [
+    "a7da188b-b61b-50c2-9e1a-577a0d78603b",
+    "c03fafe8-a816-52b0-adb3-34710ff17db7"
+   ],
+   "synced_at": "2026-07-30T17:01:02.947939+00:00",
+   "removed_at": null
+  }
+ },
+ "episodes": {
+  "a7da188b-b61b-50c2-9e1a-577a0d78603b": {
+   "episode_id": "a7da188b-b61b-50c2-9e1a-577a0d78603b",
+   "file_id": "aae47aec-af1c-5c9c-b8e7-3782e99a9f93",
+   "text": "Workvivo supports user provisioning from a file import or from SCIM.\n\nEmail addresses must stay the same across a provisioning switch.",
+   "removed_at": null
+  },
+  "1f86bc2d-3cfa-57c5-be87-e631d1a82d7f": {
+   "episode_id": "1f86bc2d-3cfa-57c5-be87-e631d1a82d7f",
+   "file_id": "aae47aec-af1c-5c9c-b8e7-3782e99a9f93",
+   "text": "Team names are linked to shoutouts and to auto-enrollment for spaces.\n\nReach out to Workvivo Support before changing a provisioning source.",
+   "removed_at": "2026-07-30T17:01:02.947939+00:00"
+  },
+  "c03fafe8-a816-52b0-adb3-34710ff17db7": {
+   "episode_id": "c03fafe8-a816-52b0-adb3-34710ff17db7",
+   "file_id": "aae47aec-af1c-5c9c-b8e7-3782e99a9f93",
+   "text": "Team names are linked to shoutouts and to auto-enrollment for spaces.\n\nReach out to Workvivo Support before changing a provisioning source.\nAlso, we need to work on pipipupu and PAPAPAPPTPTPR",
+   "removed_at": null
+  }
+ }
+}

@@ -6,22 +6,22 @@ from pipeline.resolution import _pick_contexts, validate_partition
 
 
 def test_omitted_members_repaired_as_singletons() -> None:
-    entities = ["Alice", "Bob", "Carol"]
+    concepts = ["Alice", "Bob", "Carol"]
     result = validate_partition(
-        entities,
+        concepts,
         {"groups": [{"canonical": "Alice", "members": ["Alice"],
                      "confidence": "high", "reason": "x"}]},
         verbose=False,
     )
     covered = {m for g in result["groups"] for m in g["members"]}
-    assert covered == set(entities)
+    assert covered == set(concepts)
     assert result["repaired"] == 2
 
 
 def test_hallucinated_member_dropped() -> None:
-    entities = ["Alice", "Bob"]
+    concepts = ["Alice", "Bob"]
     result = validate_partition(
-        entities,
+        concepts,
         {"groups": [{"canonical": "Alice",
                      "members": ["Alice", "Zebra", "Bob"],
                      "confidence": "high", "reason": "x"}]},
@@ -33,9 +33,9 @@ def test_hallucinated_member_dropped() -> None:
 
 
 def test_normalization_fallback_matches_quoted_variant() -> None:
-    entities = ["Neo4j"]
+    concepts = ["Neo4j"]
     result = validate_partition(
-        entities,
+        concepts,
         {"groups": [{"canonical": "Neo4j", "members": ["'Neo4j' "],
                      "confidence": "high", "reason": "x"}]},
         verbose=False,
@@ -45,9 +45,9 @@ def test_normalization_fallback_matches_quoted_variant() -> None:
 
 
 def test_duplicate_member_kept_once() -> None:
-    entities = ["Alice", "Bob"]
+    concepts = ["Alice", "Bob"]
     result = validate_partition(
-        entities,
+        concepts,
         {"groups": [
             {"canonical": "Alice", "members": ["Alice", "Alice"],
              "confidence": "high", "reason": "x"},

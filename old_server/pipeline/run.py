@@ -30,7 +30,7 @@ from dotenv import load_dotenv
 
 from pipeline import config
 
-STAGES = ["mentions", "embed", "resolve", "entity-vectors", "relations", "upload"]
+STAGES = ["candidates", "embed", "resolve", "entity-vectors", "relations", "upload"]
 
 
 class ArtifactPaths(NamedTuple):
@@ -64,14 +64,14 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--notes-dir", type=Path, required=True,
                    help="Directory scanned recursively for .md source files")
     p.add_argument("--from", dest="from_stage", choices=STAGES, default=STAGES[0],
-                   help="Run from this stage onward (default: mentions)")
+                   help="Run from this stage onward (default: candidates)")
     p.add_argument("--only", choices=STAGES, default=None,
                    help="Run exactly one stage")
     p.add_argument("--force", action="store_true",
                    help="Rerun stages from --from even if their artifacts are fresh")
     p.add_argument("--extraction-model", default=config.EXTRACTION_MODEL)
     p.add_argument("--no-gleaning", action="store_true",
-                   help="Disable the second-pass gleaning call in mention extraction")
+                   help="Disable the second-pass gleaning call in candidate extraction")
     p.add_argument("--token-budget", type=int, default=None,
                    help="Cap input tokens of pending files processed this run")
     p.add_argument("--skip-upload", action="store_true",
@@ -101,11 +101,15 @@ def _is_fresh(output: Path, inputs: list[Path]) -> bool:
     return _mtime(output) >= max((_mtime(p) for p in inputs), default=0.0)
 
 
-def _load_surface_vectors(path: Path) -> dict[str, np.ndarray]:
+def _load_unit_vectors(path: Path) -> dict[str, np.ndarray]:
+    """``{unit_key: vector}`` — one row per (concept, context, episode)."""
     if not path.exists():
         sys.exit(f"missing vector cache: {path} — run the 'embed' stage first")
     npz = np.load(path, allow_pickle=False)
-    return {str(e): v for e, v in zip(npz["entities"], npz["matrix"])}
+    if "keys" not in npz:
+        sys.exit(f"{path} predates unit-level vectors — rerun the 'embed' stage "
+                 f"with --force")
+    return {str(k): v for k, v in zip(npz["keys"], npz["matrix"])}
 
 
 def _selected_stages(args: argparse.Namespace) -> list[str]:
@@ -148,11 +152,11 @@ def main() -> None:
     for name in stages:
         start = time.monotonic()
 
-        if name == "mentions":
+        if name == "candidates":
             # Incremental + resumable: safe to always run (no-op if all cached).
-            from pipeline import mentions
+            from pipeline import candidates
 
-            mentions.run(
+            candidates.run(
                 args.notes_dir,
                 model=args.extraction_model,
                 enable_gleaning=not args.no_gleaning,
@@ -166,9 +170,9 @@ def main() -> None:
             if not forced and _is_fresh(paths.vector, [paths.entity]):
                 print("[2/6] embed: fresh — skipped")
             else:
-                from pipeline import embed_mentions
+                from pipeline import embed_candidates
 
-                embed_mentions.run(
+                embed_candidates.run(
                     cache_path=paths.entity, vector_cache=paths.vector
                 )
 
@@ -179,11 +183,11 @@ def main() -> None:
             else:
                 from pipeline import resolution
 
-                vectors = _load_surface_vectors(paths.vector)
-                mentions_data = json.loads(paths.entity.read_text())["mentions"]
+                unit_vectors = _load_unit_vectors(paths.vector)
+                candidates_data = json.loads(paths.entity.read_text())["candidates"]
                 resolution.run(
-                    vectors,  # type: ignore[arg-type]
-                    mentions_data,
+                    unit_vectors,  # type: ignore[arg-type]
+                    candidates_data,
                     resolve_model=config.RESOLVE_MODEL,
                     escalate_model=config.ESCALATE_MODEL,
                     workers=config.RESOLVE_WORKERS,
@@ -198,10 +202,10 @@ def main() -> None:
                 from pipeline import entity_vectors
 
                 resolved = json.loads(paths.resolved.read_text())
-                surface_vectors = _load_surface_vectors(paths.vector)
+                unit_vectors = _load_unit_vectors(paths.vector)
                 entity_vectors.run(
                     resolved["entities"],
-                    surface_vectors,
+                    unit_vectors,
                     cache_path=paths.entity_vector,
                 )
 

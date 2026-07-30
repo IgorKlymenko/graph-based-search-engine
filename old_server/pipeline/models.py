@@ -1,12 +1,18 @@
 """Typed records shared across pipeline stages.
 
 ``RelationEdge`` and ``NodeFact`` are ported verbatim from
-``relation_extraction.ipynb``; ``Mention`` and ``ResolvedEntity`` formalize the
-dict shapes the notebooks and ``graph_upload.py`` exchange via JSON caches.
+``relation_extraction.ipynb``; ``Candidate`` and ``ResolvedEntity`` formalize the
+dict shapes the pipeline stages and ``graph_upload.py`` exchange via JSON caches.
+
+Vocabulary: a *concept* is a candidate string as it appears in the source; an
+*episode* is the ~1000-char document slice containing it (see episodes.py); a
+*canonical entity* is the group of concepts that resolution judged to denote one
+real-world thing (see resolution.py).
 """
 
 from __future__ import annotations
 
+import hashlib
 from typing import NamedTuple
 
 from pydantic import BaseModel
@@ -30,15 +36,36 @@ CONTENT_TYPES = {"assertion", "definition", "opinion", "instruction", "predictio
 EDGE_TYPES = {"assertion", "definition"}
 
 
-class Mention(BaseModel):
-    """One entity-mention occurrence in a chunk.
+def unit_key(candidate: dict) -> str:
+    """Stable id for one resolution unit: a ``(concept, context)`` in an episode.
 
-    ``episode`` is the full chunk text; ``episode_char_start`` / ``_end`` are the
-    chunk's offsets in the source document (exact slice — see chunking.py), which
-    relation extraction reuses instead of re-deriving them.
+    Stage 2 embeds one vector per unit and stage 4 resolves units, so both must
+    derive the same id from a candidate dict alone — hence hashing ``context``
+    rather than carrying a span offset across the stage boundary.
+
+    Scoped to the episode on purpose: the span vector is a function of the whole
+    episode, so the same sentence appearing in two documents is two units with
+    two genuinely different vectors.
+    """
+    ctx = hashlib.sha1(candidate["context"].encode()).hexdigest()[:8]
+    return "\x1f".join((
+        candidate["concept"],
+        candidate["source_file"],
+        str(candidate["episode_idx"]),
+        ctx,
+    ))
+
+
+class Candidate(BaseModel):
+    """One entity-candidate occurrence in an episode.
+
+    ``concept`` is the candidate string itself, copied verbatim from the source;
+    ``episode`` is the full episode text containing it. ``episode_char_start`` /
+    ``_end`` are the episode's offsets in the source document (exact slice — see
+    episodes.py), which relation extraction reuses instead of re-deriving them.
     """
 
-    text: str
+    concept: str
     type: str
     context: str
     episode_idx: int
@@ -104,7 +131,7 @@ class NodeFact(BaseModel):
     extractor_version: str = EXTRACTOR_VERSION
 
 
-class ChunkResult(NamedTuple):
+class EpisodeResult(NamedTuple):
     edges: list[RelationEdge]
     node_facts: list[NodeFact]
     non_facts: list[dict]  # metaphor / other_non_fact only
