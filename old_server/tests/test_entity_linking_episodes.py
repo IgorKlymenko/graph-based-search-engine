@@ -93,26 +93,27 @@ def test_offsets_are_monotonic_and_nonoverlapping() -> None:
 
 def test_record_shape() -> None:
     record = E.build_records("file-1", "Only paragraph.")[0]
-    assert set(record) == {"episode_id", "file_id", "ordinal", "text"}
+    assert set(record) == {"episode_id", "file_id", "text"}
 
 
-def test_ordinal_is_reading_order_and_not_part_of_identity() -> None:
-    """``ordinal`` exists for consumers holding only an id (an MCP tool asking
-    for neighbouring episodes); it must never affect ``episode_id``."""
+def test_reading_order_is_recoverable_from_episode_ids(store) -> None:
+    """Order lives in ``files.episode_ids``, not on the episode.
+
+    A consumer holding only an episode id (an MCP tool asking for neighbouring
+    episodes) finds its position there, so nothing needs an ordering column.
+    """
     paras = [para(f"P{i}", 160) for i in range(4)]
-    before = E.build_records("file-1", "\n\n".join(paras), max_chars=1000)
-    assert [r["ordinal"] for r in before] == list(range(len(before)))
+    diff = E.sync_file(store, "\n\n".join(paras), max_chars=1000, **DOC_A)
+    before = store["files"][diff.file_id]["episode_ids"]
+    assert len(before) == len(paras)
 
-    after = E.build_records(
-        "file-1", "\n\n".join([para("Inserted", 160)] + paras), max_chars=1000
-    )
-    moved = {r["episode_id"]: r["ordinal"] for r in after}
-    for record in before:
-        assert moved[record["episode_id"]] == record["ordinal"] + 1  # shifted
-    assert [r["ordinal"] for r in after] == list(range(len(after)))
+    E.sync_file(store, "\n\n".join([para("Inserted", 160)] + paras),
+                max_chars=1000, **DOC_A)
+    after = store["files"][diff.file_id]["episode_ids"]
+    assert after[1:] == before  # every episode shifted by one, order intact
 
 
-def test_sync_refreshes_ordinal_without_re_extracting(store) -> None:
+def test_insertion_moves_episodes_without_re_extracting(store) -> None:
     paras = [para(f"P{i}", 160) for i in range(3)]
     E.sync_file(store, "\n\n".join(paras), max_chars=1000, **DOC_A)
     for episode in store["episodes"].values():
@@ -121,9 +122,9 @@ def test_sync_refreshes_ordinal_without_re_extracting(store) -> None:
     E.sync_file(store, "\n\n".join([para("Inserted", 160)] + paras),
                 max_chars=1000, **DOC_A)
     live = [e for e in store["episodes"].values() if e["removed_at"] is None]
-    assert sorted(e["ordinal"] for e in live) == list(range(len(live)))
+    assert len(live) == len(paras) + 1
     kept = [e for e in live if e["extracted_at"]]
-    assert len(kept) == len(paras)  # ordinals moved, extraction survived
+    assert len(kept) == len(paras)  # positions moved, extraction survived
 
 
 def test_episode_id_depends_on_text_and_file() -> None:

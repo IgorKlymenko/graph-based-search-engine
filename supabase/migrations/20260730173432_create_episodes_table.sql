@@ -3,11 +3,11 @@ CREATE TABLE public.episodes (
     file_id         UUID NOT NULL,
     tenant_id       UUID NOT NULL,
     text            TEXT NOT NULL,
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     expired_at      TIMESTAMPTZ, --removing file invalidates all the episodes on canscade; but the episode can be still invalidated searately if file changes from the code
     FOREIGN KEY (file_id, tenant_id) 
         REFERENCES public.files (id, tenant_id) ON DELETE CASCADE,
-    UNIQUE (id, tenant_id), --for the later reference in the nodes using the composite FK
+    UNIQUE (tenant_id, id), --for the later reference in the nodes using the composite FK
     CHECK (expired_at IS NULL OR expired_at >= created_at)
 );
 

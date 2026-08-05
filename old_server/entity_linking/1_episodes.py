@@ -148,10 +148,10 @@ def build_records(file_id: str, doc: str, max_chars: int = 1000) -> list[dict]:
     ``doc.find(text)`` recovers its position exactly. Offsets would describe a
     *version* of the document while ``episode_id`` and ``text`` describe content.
 
-    ``ordinal`` is the exception — reading order, contiguous from 0, refreshed on
-    every sync. It is kept because a consumer holding only an episode id (an MCP
-    tool fetching neighbouring episodes, say) has no source document to derive
-    order from. It is deliberately not part of identity.
+    Records come back in reading order, and ``files.episode_ids`` preserves that
+    order, so a consumer holding only an episode id can still find its neighbours
+    by position in that list. Nothing on the record encodes order — a stored
+    position would be version-dependent while the rest of the record is not.
 
     Repeated identical text yields one record, at its first occurrence.
     """
@@ -165,7 +165,6 @@ def build_records(file_id: str, doc: str, max_chars: int = 1000) -> list[dict]:
         records.append({
             "episode_id": episode_id,
             "file_id": file_id,
-            "ordinal": len(records),
             "text": ep.text,
         })
     return records
@@ -253,8 +252,8 @@ def sync_file(
     for record in records:
         existing = store["episodes"].get(record["episode_id"])
         if existing is not None:
-            # same text, possibly moved: ordinal is version-dependent, id is not
-            existing["ordinal"] = record["ordinal"]
+            # same text, possibly moved: position changes, identity does not, so
+            # the episode is only un-retired and never re-extracted
             existing["removed_at"] = None
         else:
             store["episodes"][record["episode_id"]] = {

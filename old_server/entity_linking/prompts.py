@@ -93,3 +93,134 @@ CANDIDATE_SCHEMA = {
     },
     "required": ["candidates"],
 }
+
+
+# ── stage 1b: coreference chains over pre-indexed spans ───────────────────────
+
+CHAIN_SYSTEM_PROMPT = """You group pre-indexed spans of one text passage into coreference chains.
+
+The passage is shown with spans already marked as ⟦c0 text⟧. Markers nest: ⟦c4 the ⟦c5 Neo4j⟧ database⟧ means span c4 is "the Neo4j database" and span c5 is "Neo4j" inside it. The markers are annotation only — read the passage as if they were not there.
+
+YOUR OUTPUT REFERENCES SPAN IDs, NEVER TEXT. Every id you emit in a chain must be one of the ⟦c…⟧ ids shown, or an n-id you declare in new_spans. Do not invent ids. Do not quote passage text back except inside new_spans.
+
+CHAINS
+A chain is the set of spans in THIS passage that refer to the same real-world thing. Include a span only when the passage itself makes the identity clear — a shared antecedent, an apposition, an explicit alias, a pronoun with an unambiguous referent.
+- A span that refers to something nothing else refers to still forms its own chain of one. Emit it.
+- Never chain two spans merely because they are similar, share a head noun, or are about related things. "GPT-4" and "GPT-4 Turbo" are different chains. A company and its product are different chains.
+- A nested span is usually its own chain: in "the Neo4j database", "Neo4j" names a product and the whole phrase names a database. Chain them only if the passage uses them interchangeably.
+- Do not chain across things the passage never equates, even if you know from outside knowledge that they are the same.
+
+HEAD
+For each chain pick the span that names the thing best: a proper name first, else the most complete descriptive phrase. Never pick a pronoun as head unless the chain contains nothing else.
+
+WHAT IS NEVER A CHAIN MEMBER
+- Spans denoting a kind or class rather than one specific thing ("users", "a new team", "an approach").
+- Scalar values: numbers, money, dates, durations, percentages.
+- A span whose referent the passage leaves genuinely unclear — leave it out rather than guess.
+
+NEW SPANS
+If the passage names something with NO marked span covering it, declare it in new_spans with:
+- "text": copied character-for-character from the passage, exactly once findable. If the same string occurs more than once, or you cannot copy it exactly, leave it out — an approximate copy is worse than a miss.
+- "candidate_type": proper_name, definite_description, pronoun, or nominal.
+Then reference its n-id in a chain. Use this sparingly: the marked spans usually suffice."""
+
+CHAIN_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "new_spans": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "id": {"type": "string"},
+                    "text": {"type": "string"},
+                    "candidate_type": {
+                        "type": "string",
+                        "enum": ["proper_name", "definite_description",
+                                 "pronoun", "nominal"],
+                    },
+                },
+                "required": ["id", "text", "candidate_type"],
+            },
+        },
+        "chains": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "head": {"type": "string"},
+                    "spans": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["head", "spans"],
+            },
+        },
+    },
+    "required": ["new_spans", "chains"],
+}
+
+
+# ── stage 3: adjudicate a pair the scorer could not settle ────────────────────
+
+MERGE_REVIEW_PROMPT = """You decide whether two mentions from different passages refer to the same real-world entity.
+
+You are given, for each side: the names it was written as, and the sentences it appeared in. The automatic scorer already handled the confident cases — these two reached you because the evidence is genuinely mixed, so weigh what the passages actually say over how similar the names look.
+
+MERGE only on evidence of identity:
+- one passage states or implies the two names denote one thing (an alias, an apposition, a short form introduced with its expansion)
+- the roles and facts attributed to each are consistent with a single referent
+
+KEEP SEPARATE when:
+- the two are distinguished anywhere, or attributed incompatible roles, facts or affiliations
+- they share a surname, first name, initial or head noun but nothing else — people and products routinely share name fragments, and a shared fragment is not evidence
+- a short form could plausibly belong to either of two entities the corpus mentions
+- you would be guessing
+
+Default to separate. A wrong merge permanently fuses two entities' facts and is not recoverable downstream; a missed merge leaves a duplicate that later evidence can still join.
+
+Answer with the decision, a confidence in [0,1], and one sentence naming the specific evidence you used."""
+
+MERGE_REVIEW_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "same_entity": {"type": "boolean"},
+        "confidence": {"type": "number"},
+        "reason": {"type": "string"},
+    },
+    "required": ["same_entity", "confidence", "reason"],
+}
+
+
+ENTITY_CHOICE_PROMPT = """You decide which known entity a mention refers to, or that none of them fit.
+
+The mention's name is ambiguous: the corpus uses that exact form for more than one entity, so the name alone cannot settle it. You are given the passage the mention appeared in, and a profile of each candidate entity built from everywhere else in the corpus — the names it goes by and the passages it appears in.
+
+Use the profiles. That is the point of this call: the name is uninformative, so the decision has to come from whether the mention's role, activity and associations match one candidate's established record better than the others'.
+
+CHOOSE a candidate only when:
+- the passage attributes something to the mention that the candidate's profile corroborates — the same project, team, system, responsibility or event
+- and nothing in the passage contradicts that candidate
+
+CHOOSE NONE when:
+- the passage would fit two candidates equally well
+- the passage says nothing that distinguishes them
+- the mention looks like a third entity not among the candidates
+- you would be guessing
+
+Default to none. Attaching a mention to the wrong entity asserts false facts about a real one; leaving it unattached only leaves it unresolved, and later evidence can still place it.
+
+Answer with the chosen entity id or null, a confidence in [0,1], and one sentence naming the specific evidence you used."""
+
+ENTITY_CHOICE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "entity_id": {"type": ["string", "null"]},
+        "confidence": {"type": "number"},
+        "reason": {"type": "string"},
+    },
+    "required": ["entity_id", "confidence", "reason"],
+}

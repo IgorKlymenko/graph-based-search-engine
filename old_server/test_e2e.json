@@ -1,0 +1,755 @@
+[
+  {
+    "a": [
+      "S. Chen",
+      "Sarah Chen"
+    ],
+    "b": [
+      "S. Chen"
+    ],
+    "p": 0.9610642171852131,
+    "verdict": "merge",
+    "gold": 1,
+    "correct": true
+  },
+  {
+    "a": [
+      "S. Chen",
+      "Sarah Chen"
+    ],
+    "b": [
+      "Okta",
+      "the Okta configuration"
+    ],
+    "p": 0.039128257045945046,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "S. Chen",
+      "Sarah Chen"
+    ],
+    "b": [
+      "Sarah Chen"
+    ],
+    "p": 0.9706877692486436,
+    "verdict": "merge",
+    "gold": 1,
+    "correct": true
+  },
+  {
+    "a": [
+      "S. Chen",
+      "Sarah Chen"
+    ],
+    "b": [
+      "Steven Chen"
+    ],
+    "p": 0.11446461173783587,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "S. Chen",
+      "Sarah Chen"
+    ],
+    "b": [
+      "Steven Chen"
+    ],
+    "p": 0.11446460923782363,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "S. Chen",
+      "Sarah Chen"
+    ],
+    "b": [
+      "Okta"
+    ],
+    "p": 0.033513780396621506,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "S. Chen",
+      "Sarah Chen"
+    ],
+    "b": [
+      "Workvivo"
+    ],
+    "p": 0.08367030665929623,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "S. Chen",
+      "Sarah Chen"
+    ],
+    "b": [
+      "SCIM"
+    ],
+    "p": 0.13084619166016914,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "S. Chen",
+      "Sarah Chen"
+    ],
+    "b": [
+      "Okta"
+    ],
+    "p": 0.033513780396621506,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "S. Chen",
+      "Sarah Chen"
+    ],
+    "b": [
+      "Maria Lopez"
+    ],
+    "p": 0.16188029909369617,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "S. Chen",
+      "Sarah Chen"
+    ],
+    "b": [
+      "M. Lopez"
+    ],
+    "p": 0.13641568344134933,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "S. Chen"
+    ],
+    "b": [
+      "Sarah Chen"
+    ],
+    "p": 0.9407521969582112,
+    "verdict": "merge",
+    "gold": 1,
+    "correct": true
+  },
+  {
+    "a": [
+      "S. Chen"
+    ],
+    "b": [
+      "Steven Chen"
+    ],
+    "p": 0.3328248073232213,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "S. Chen"
+    ],
+    "b": [
+      "Steven Chen"
+    ],
+    "p": 0.33282482870353947,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "S. Chen"
+    ],
+    "b": [
+      "Okta"
+    ],
+    "p": 0.02723049292179292,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "S. Chen"
+    ],
+    "b": [
+      "Workvivo"
+    ],
+    "p": 0.07272444869880755,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "S. Chen"
+    ],
+    "b": [
+      "SCIM"
+    ],
+    "p": 0.15824622831930704,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "S. Chen"
+    ],
+    "b": [
+      "Okta"
+    ],
+    "p": 0.02723049292179292,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "S. Chen"
+    ],
+    "b": [
+      "Maria Lopez"
+    ],
+    "p": 0.1150582926184087,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "S. Chen"
+    ],
+    "b": [
+      "M. Lopez"
+    ],
+    "p": 0.153034525084493,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Okta",
+      "the Okta configuration"
+    ],
+    "b": [
+      "Sarah Chen"
+    ],
+    "p": 0.10960852751895893,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Okta",
+      "the Okta configuration"
+    ],
+    "b": [
+      "Steven Chen"
+    ],
+    "p": 0.10639397999268069,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Okta",
+      "the Okta configuration"
+    ],
+    "b": [
+      "Steven Chen"
+    ],
+    "p": 0.1063939614018239,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Okta",
+      "the Okta configuration"
+    ],
+    "b": [
+      "Okta"
+    ],
+    "p": 0.9706877692486436,
+    "verdict": "merge",
+    "gold": 1,
+    "correct": true
+  },
+  {
+    "a": [
+      "Okta",
+      "the Okta configuration"
+    ],
+    "b": [
+      "Workvivo"
+    ],
+    "p": 0.04077117427740176,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Okta",
+      "the Okta configuration"
+    ],
+    "b": [
+      "SCIM"
+    ],
+    "p": 0.03555641727434129,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Okta",
+      "the Okta configuration"
+    ],
+    "b": [
+      "Okta"
+    ],
+    "p": 0.9706877692486436,
+    "verdict": "merge",
+    "gold": 1,
+    "correct": true
+  },
+  {
+    "a": [
+      "Okta",
+      "the Okta configuration"
+    ],
+    "b": [
+      "Maria Lopez"
+    ],
+    "p": 0.10862685626596624,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Okta",
+      "the Okta configuration"
+    ],
+    "b": [
+      "M. Lopez"
+    ],
+    "p": 0.1065084721984368,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Sarah Chen"
+    ],
+    "b": [
+      "Steven Chen"
+    ],
+    "p": 0.10076223168082991,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Sarah Chen"
+    ],
+    "b": [
+      "Okta"
+    ],
+    "p": 0.10324199623580252,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Sarah Chen"
+    ],
+    "b": [
+      "Workvivo"
+    ],
+    "p": 0.08367030665929623,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Sarah Chen"
+    ],
+    "b": [
+      "SCIM"
+    ],
+    "p": 0.11811731648600114,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Sarah Chen"
+    ],
+    "b": [
+      "Okta"
+    ],
+    "p": 0.10324199623580252,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Sarah Chen"
+    ],
+    "b": [
+      "Maria Lopez"
+    ],
+    "p": 0.16188029909369617,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Sarah Chen"
+    ],
+    "b": [
+      "M. Lopez"
+    ],
+    "p": 0.107930987023808,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Steven Chen"
+    ],
+    "b": [
+      "Steven Chen"
+    ],
+    "p": 0.4999999999997391,
+    "verdict": "merge",
+    "gold": 1,
+    "correct": true
+  },
+  {
+    "a": [
+      "Steven Chen"
+    ],
+    "b": [
+      "Okta"
+    ],
+    "p": 0.0918083350446001,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Steven Chen"
+    ],
+    "b": [
+      "Workvivo"
+    ],
+    "p": 0.08059262600595415,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Steven Chen"
+    ],
+    "b": [
+      "SCIM"
+    ],
+    "p": 0.12844970210446438,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Steven Chen"
+    ],
+    "b": [
+      "Okta"
+    ],
+    "p": 0.0918083350446001,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Steven Chen"
+    ],
+    "b": [
+      "Maria Lopez"
+    ],
+    "p": 0.09387821797560002,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Steven Chen"
+    ],
+    "b": [
+      "M. Lopez"
+    ],
+    "p": 0.0956438212859522,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Steven Chen"
+    ],
+    "b": [
+      "Okta"
+    ],
+    "p": 0.09180831874053554,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Steven Chen"
+    ],
+    "b": [
+      "Workvivo"
+    ],
+    "p": 0.08059260396275707,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Steven Chen"
+    ],
+    "b": [
+      "SCIM"
+    ],
+    "p": 0.12844969099765388,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Steven Chen"
+    ],
+    "b": [
+      "Okta"
+    ],
+    "p": 0.09180831874053554,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Steven Chen"
+    ],
+    "b": [
+      "Maria Lopez"
+    ],
+    "p": 0.09387820075643533,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Steven Chen"
+    ],
+    "b": [
+      "M. Lopez"
+    ],
+    "p": 0.09564380556271339,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Okta"
+    ],
+    "b": [
+      "Workvivo"
+    ],
+    "p": 0.04077117427740176,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Okta"
+    ],
+    "b": [
+      "SCIM"
+    ],
+    "p": 0.02843741683593529,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Okta"
+    ],
+    "b": [
+      "Okta"
+    ],
+    "p": 0.5000000000000001,
+    "verdict": "merge",
+    "gold": 1,
+    "correct": true
+  },
+  {
+    "a": [
+      "Okta"
+    ],
+    "b": [
+      "Maria Lopez"
+    ],
+    "p": 0.10178271281689062,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Okta"
+    ],
+    "b": [
+      "M. Lopez"
+    ],
+    "p": 0.1065084721984368,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Workvivo"
+    ],
+    "b": [
+      "Maria Lopez"
+    ],
+    "p": 0.09125347485167225,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Workvivo"
+    ],
+    "b": [
+      "M. Lopez"
+    ],
+    "p": 0.09927819514842684,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "SCIM"
+    ],
+    "b": [
+      "Maria Lopez"
+    ],
+    "p": 0.09282733579644416,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "SCIM"
+    ],
+    "b": [
+      "M. Lopez"
+    ],
+    "p": 0.10820604685403044,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Okta"
+    ],
+    "b": [
+      "Maria Lopez"
+    ],
+    "p": 0.10178271281689062,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Okta"
+    ],
+    "b": [
+      "M. Lopez"
+    ],
+    "p": 0.1065084721984368,
+    "verdict": "split",
+    "gold": 0,
+    "correct": true
+  },
+  {
+    "a": [
+      "Maria Lopez"
+    ],
+    "b": [
+      "M. Lopez"
+    ],
+    "p": 0.359157591583395,
+    "verdict": "merge",
+    "gold": 1,
+    "correct": true
+  }
+]

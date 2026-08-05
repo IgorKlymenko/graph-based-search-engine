@@ -24,6 +24,9 @@ dependencies = [
     "babel>=2.18.0",
     "dateparser>=1.4.1",
     "mcp>=1.28.1",
+    "spacy>=3.8.14",
+    "einops>=0.8.2",
+    "hnswlib>=0.8.0",
 ]
 
 [project.optional-dependencies]

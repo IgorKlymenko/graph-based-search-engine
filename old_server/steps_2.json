@@ -1,0 +1,1187 @@
+[
+  {
+    "step": "0_episode",
+    "note": "clean text — the only thing offsets refer to",
+    "payload": "Supabase is a combination of open source tools. We’re building the features of Firebase using enterprise-grade, open source products. If the tools and communities exist, with an MIT, Apache 2, or equivalent open license, we will use and support that tool. If the tool doesn't exist, we build and open source it ourselves. Supabase is not a 1-to-1 mapping of Firebase. Our aim is to give developers a Firebase-like developer experience using open source tools."
+  },
+  {
+    "step": "1_parser_spans",
+    "note": "30 spans found deterministically",
+    "payload": [
+      {
+        "sid": "c0",
+        "start": 0,
+        "end": 8,
+        "text": "Supabase",
+        "candidate_type": "proper_name",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c1",
+        "start": 12,
+        "end": 25,
+        "text": "a combination",
+        "candidate_type": "nominal",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c2",
+        "start": 29,
+        "end": 46,
+        "text": "open source tools",
+        "candidate_type": "nominal",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c3",
+        "start": 48,
+        "end": 50,
+        "text": "We",
+        "candidate_type": "pronoun",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c4",
+        "start": 63,
+        "end": 75,
+        "text": "the features",
+        "candidate_type": "definite_description",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c5",
+        "start": 79,
+        "end": 87,
+        "text": "Firebase",
+        "candidate_type": "proper_name",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c6",
+        "start": 94,
+        "end": 132,
+        "text": "enterprise-grade, open source products",
+        "candidate_type": "nominal",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c7",
+        "start": 137,
+        "end": 146,
+        "text": "the tools",
+        "candidate_type": "definite_description",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c8",
+        "start": 151,
+        "end": 162,
+        "text": "communities",
+        "candidate_type": "nominal",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c9",
+        "start": 175,
+        "end": 181,
+        "text": "an MIT",
+        "candidate_type": "proper_name",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c10",
+        "start": 178,
+        "end": 181,
+        "text": "MIT",
+        "candidate_type": "proper_name",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c11",
+        "start": 183,
+        "end": 189,
+        "text": "Apache",
+        "candidate_type": "proper_name",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c12",
+        "start": 183,
+        "end": 191,
+        "text": "Apache 2",
+        "candidate_type": "proper_name",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c13",
+        "start": 196,
+        "end": 219,
+        "text": "equivalent open license",
+        "candidate_type": "nominal",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c14",
+        "start": 221,
+        "end": 223,
+        "text": "we",
+        "candidate_type": "pronoun",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c15",
+        "start": 245,
+        "end": 254,
+        "text": "that tool",
+        "candidate_type": "definite_description",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c16",
+        "start": 259,
+        "end": 267,
+        "text": "the tool",
+        "candidate_type": "definite_description",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c17",
+        "start": 283,
+        "end": 285,
+        "text": "we",
+        "candidate_type": "pronoun",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c18",
+        "start": 296,
+        "end": 307,
+        "text": "open source",
+        "candidate_type": "nominal",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c19",
+        "start": 308,
+        "end": 310,
+        "text": "it",
+        "candidate_type": "pronoun",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c20",
+        "start": 311,
+        "end": 320,
+        "text": "ourselves",
+        "candidate_type": "pronoun",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c21",
+        "start": 322,
+        "end": 330,
+        "text": "Supabase",
+        "candidate_type": "proper_name",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c22",
+        "start": 338,
+        "end": 354,
+        "text": "a 1-to-1 mapping",
+        "candidate_type": "nominal",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c23",
+        "start": 358,
+        "end": 366,
+        "text": "Firebase",
+        "candidate_type": "proper_name",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c24",
+        "start": 368,
+        "end": 371,
+        "text": "Our",
+        "candidate_type": "pronoun",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c25",
+        "start": 368,
+        "end": 375,
+        "text": "Our aim",
+        "candidate_type": "nominal",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c26",
+        "start": 387,
+        "end": 397,
+        "text": "developers",
+        "candidate_type": "nominal",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c27",
+        "start": 398,
+        "end": 434,
+        "text": "a Firebase-like developer experience",
+        "candidate_type": "nominal",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c28",
+        "start": 400,
+        "end": 408,
+        "text": "Firebase",
+        "candidate_type": "proper_name",
+        "origin": "parser",
+        "match": "exact"
+      },
+      {
+        "sid": "c29",
+        "start": 441,
+        "end": 458,
+        "text": "open source tools",
+        "candidate_type": "nominal",
+        "origin": "parser",
+        "match": "exact"
+      }
+    ]
+  },
+  {
+    "step": "2_marked_copy",
+    "note": "what the model sees; original untouched",
+    "payload": "⟦c0 Supabase⟧ is ⟦c1 a combination⟧ of ⟦c2 open source tools⟧. ⟦c3 We⟧’re building ⟦c4 the features⟧ of ⟦c5 Firebase⟧ using ⟦c6 enterprise-grade, open source products⟧. If ⟦c7 the tools⟧ and ⟦c8 communities⟧ exist, with ⟦c9 an ⟦c10 MIT⟧⟧, ⟦c12 ⟦c11 Apache⟧ 2⟧, or ⟦c13 equivalent open license⟧, ⟦c14 we⟧ will use and support ⟦c15 that tool⟧. If ⟦c16 the tool⟧ doesn't exist, ⟦c17 we⟧ build and ⟦c18 open source⟧ ⟦c19 it⟧ ⟦c20 ourselves⟧. ⟦c21 Supabase⟧ is not ⟦c22 a 1-to-1 mapping⟧ of ⟦c23 Firebase⟧. ⟦c25 ⟦c24 Our⟧ aim⟧ is to give ⟦c26 developers⟧ ⟦c27 a ⟦c28 Firebase⟧-like developer experience⟧ using ⟦c29 open source tools⟧."
+  },
+  {
+    "step": "3_model_response",
+    "note": "live",
+    "payload": {
+      "new_spans": [
+        {
+          "id": "n1",
+          "text": "the features",
+          "candidate_type": "definite_description"
+        },
+        {
+          "id": "n2",
+          "text": "the tool",
+          "candidate_type": "definite_description"
+        }
+      ],
+      "chains": [
+        {
+          "head": "c0",
+          "spans": [
+            "c0",
+            "c21"
+          ]
+        },
+        {
+          "head": "c1",
+          "spans": [
+            "c1"
+          ]
+        },
+        {
+          "head": "c2",
+          "spans": [
+            "c2",
+            "c6",
+            "c9",
+            "c13",
+            "c29"
+          ]
+        },
+        {
+          "head": "c3",
+          "spans": [
+            "c3",
+            "c14",
+            "c17"
+          ]
+        },
+        {
+          "head": "n1",
+          "spans": [
+            "n1"
+          ]
+        },
+        {
+          "head": "c5",
+          "spans": [
+            "c5",
+            "c23",
+            "c28"
+          ]
+        },
+        {
+          "head": "c7",
+          "spans": [
+            "c7"
+          ]
+        },
+        {
+          "head": "c8",
+          "spans": [
+            "c8"
+          ]
+        },
+        {
+          "head": "n2",
+          "spans": [
+            "c15",
+            "c16",
+            "n2"
+          ]
+        },
+        {
+          "head": "c18",
+          "spans": [
+            "c18"
+          ]
+        },
+        {
+          "head": "c19",
+          "spans": [
+            "c19"
+          ]
+        },
+        {
+          "head": "c20",
+          "spans": [
+            "c20"
+          ]
+        },
+        {
+          "head": "c22",
+          "spans": [
+            "c22"
+          ]
+        },
+        {
+          "head": "c24",
+          "spans": [
+            "c24"
+          ]
+        },
+        {
+          "head": "c25",
+          "spans": [
+            "c25"
+          ]
+        },
+        {
+          "head": "c26",
+          "spans": [
+            "c26"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "step": "4_locate_new_spans",
+    "note": "2 located, 0 dropped",
+    "payload": {
+      "kept": [
+        {
+          "sid": "n1",
+          "start": 63,
+          "end": 75,
+          "text": "the features",
+          "candidate_type": "definite_description",
+          "origin": "model",
+          "match": "exact"
+        },
+        {
+          "sid": "n2",
+          "start": 259,
+          "end": 267,
+          "text": "the tool",
+          "candidate_type": "definite_description",
+          "origin": "model",
+          "match": "fuzzy:1.0"
+        }
+      ],
+      "dropped": []
+    }
+  },
+  {
+    "step": "5_id_validation",
+    "note": "undeclared ids are a protocol error: retry once, then fail",
+    "payload": {
+      "issued": [
+        "c0",
+        "c1",
+        "c10",
+        "c11",
+        "c12",
+        "c13",
+        "c14",
+        "c15",
+        "c16",
+        "c17",
+        "c18",
+        "c19",
+        "c2",
+        "c20",
+        "c21",
+        "c22",
+        "c23",
+        "c24",
+        "c25",
+        "c26",
+        "c27",
+        "c28",
+        "c29",
+        "c3",
+        "c4",
+        "c5",
+        "c6",
+        "c7",
+        "c8",
+        "c9"
+      ],
+      "declared_new": [
+        "n1",
+        "n2"
+      ],
+      "unverified": [],
+      "unknown": []
+    }
+  },
+  {
+    "step": "6_merge",
+    "note": "0 overlaps collapsed (longest wins)",
+    "payload": {
+      "collapsed": [],
+      "table": {
+        "c0": {
+          "sid": "c0",
+          "start": 0,
+          "end": 8,
+          "text": "Supabase",
+          "candidate_type": "proper_name",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c1": {
+          "sid": "c1",
+          "start": 12,
+          "end": 25,
+          "text": "a combination",
+          "candidate_type": "nominal",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c10": {
+          "sid": "c10",
+          "start": 178,
+          "end": 181,
+          "text": "MIT",
+          "candidate_type": "proper_name",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c11": {
+          "sid": "c11",
+          "start": 183,
+          "end": 189,
+          "text": "Apache",
+          "candidate_type": "proper_name",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c12": {
+          "sid": "c12",
+          "start": 183,
+          "end": 191,
+          "text": "Apache 2",
+          "candidate_type": "proper_name",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c13": {
+          "sid": "c13",
+          "start": 196,
+          "end": 219,
+          "text": "equivalent open license",
+          "candidate_type": "nominal",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c14": {
+          "sid": "c14",
+          "start": 221,
+          "end": 223,
+          "text": "we",
+          "candidate_type": "pronoun",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c15": {
+          "sid": "c15",
+          "start": 245,
+          "end": 254,
+          "text": "that tool",
+          "candidate_type": "definite_description",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c16": {
+          "sid": "c16",
+          "start": 259,
+          "end": 267,
+          "text": "the tool",
+          "candidate_type": "definite_description",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c17": {
+          "sid": "c17",
+          "start": 283,
+          "end": 285,
+          "text": "we",
+          "candidate_type": "pronoun",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c18": {
+          "sid": "c18",
+          "start": 296,
+          "end": 307,
+          "text": "open source",
+          "candidate_type": "nominal",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c19": {
+          "sid": "c19",
+          "start": 308,
+          "end": 310,
+          "text": "it",
+          "candidate_type": "pronoun",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c2": {
+          "sid": "c2",
+          "start": 29,
+          "end": 46,
+          "text": "open source tools",
+          "candidate_type": "nominal",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c20": {
+          "sid": "c20",
+          "start": 311,
+          "end": 320,
+          "text": "ourselves",
+          "candidate_type": "pronoun",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c21": {
+          "sid": "c21",
+          "start": 322,
+          "end": 330,
+          "text": "Supabase",
+          "candidate_type": "proper_name",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c22": {
+          "sid": "c22",
+          "start": 338,
+          "end": 354,
+          "text": "a 1-to-1 mapping",
+          "candidate_type": "nominal",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c23": {
+          "sid": "c23",
+          "start": 358,
+          "end": 366,
+          "text": "Firebase",
+          "candidate_type": "proper_name",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c24": {
+          "sid": "c24",
+          "start": 368,
+          "end": 371,
+          "text": "Our",
+          "candidate_type": "pronoun",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c25": {
+          "sid": "c25",
+          "start": 368,
+          "end": 375,
+          "text": "Our aim",
+          "candidate_type": "nominal",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c26": {
+          "sid": "c26",
+          "start": 387,
+          "end": 397,
+          "text": "developers",
+          "candidate_type": "nominal",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c27": {
+          "sid": "c27",
+          "start": 398,
+          "end": 434,
+          "text": "a Firebase-like developer experience",
+          "candidate_type": "nominal",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c28": {
+          "sid": "c28",
+          "start": 400,
+          "end": 408,
+          "text": "Firebase",
+          "candidate_type": "proper_name",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c29": {
+          "sid": "c29",
+          "start": 441,
+          "end": 458,
+          "text": "open source tools",
+          "candidate_type": "nominal",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c3": {
+          "sid": "c3",
+          "start": 48,
+          "end": 50,
+          "text": "We",
+          "candidate_type": "pronoun",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c4": {
+          "sid": "c4",
+          "start": 63,
+          "end": 75,
+          "text": "the features",
+          "candidate_type": "definite_description",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c5": {
+          "sid": "c5",
+          "start": 79,
+          "end": 87,
+          "text": "Firebase",
+          "candidate_type": "proper_name",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c6": {
+          "sid": "c6",
+          "start": 94,
+          "end": 132,
+          "text": "enterprise-grade, open source products",
+          "candidate_type": "nominal",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c7": {
+          "sid": "c7",
+          "start": 137,
+          "end": 146,
+          "text": "the tools",
+          "candidate_type": "definite_description",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c8": {
+          "sid": "c8",
+          "start": 151,
+          "end": 162,
+          "text": "communities",
+          "candidate_type": "nominal",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "c9": {
+          "sid": "c9",
+          "start": 175,
+          "end": 181,
+          "text": "an MIT",
+          "candidate_type": "proper_name",
+          "origin": "parser",
+          "match": "exact"
+        },
+        "n1": {
+          "sid": "n1",
+          "start": 63,
+          "end": 75,
+          "text": "the features",
+          "candidate_type": "definite_description",
+          "origin": "model",
+          "match": "exact"
+        },
+        "n2": {
+          "sid": "n2",
+          "start": 259,
+          "end": 267,
+          "text": "the tool",
+          "candidate_type": "definite_description",
+          "origin": "model",
+          "match": "fuzzy:1.0"
+        }
+      }
+    }
+  },
+  {
+    "step": "7_chains",
+    "note": "16 chains, heads resolved",
+    "payload": [
+      {
+        "head": "c0",
+        "spans": [
+          "c0",
+          "c21"
+        ]
+      },
+      {
+        "head": "c1",
+        "spans": [
+          "c1"
+        ]
+      },
+      {
+        "head": "c9",
+        "spans": [
+          "c9",
+          "c2",
+          "c6",
+          "c13",
+          "c29"
+        ]
+      },
+      {
+        "head": "c3",
+        "spans": [
+          "c3",
+          "c14",
+          "c17"
+        ]
+      },
+      {
+        "head": "n1",
+        "spans": [
+          "n1"
+        ]
+      },
+      {
+        "head": "c5",
+        "spans": [
+          "c5",
+          "c23",
+          "c28"
+        ]
+      },
+      {
+        "head": "c7",
+        "spans": [
+          "c7"
+        ]
+      },
+      {
+        "head": "c8",
+        "spans": [
+          "c8"
+        ]
+      },
+      {
+        "head": "c15",
+        "spans": [
+          "c15",
+          "n2"
+        ]
+      },
+      {
+        "head": "c18",
+        "spans": [
+          "c18"
+        ]
+      },
+      {
+        "head": "c19",
+        "spans": [
+          "c19"
+        ]
+      },
+      {
+        "head": "c20",
+        "spans": [
+          "c20"
+        ]
+      },
+      {
+        "head": "c22",
+        "spans": [
+          "c22"
+        ]
+      },
+      {
+        "head": "c24",
+        "spans": [
+          "c24"
+        ]
+      },
+      {
+        "head": "c25",
+        "spans": [
+          "c25"
+        ]
+      },
+      {
+        "head": "c26",
+        "spans": [
+          "c26"
+        ]
+      }
+    ]
+  },
+  {
+    "step": "8_candidate_records",
+    "note": "26 records",
+    "payload": [
+      {
+        "candidate_id": "e7d3427b-5f6d-51e6-a93c-67594e4d0edd",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 0,
+        "end": 8,
+        "text": "Supabase",
+        "candidate_type": "proper_name",
+        "origin": "parser",
+        "chain_id": "a387dcba-903d-5e2f-abb4-ea547bbae2a4",
+        "is_head": true
+      },
+      {
+        "candidate_id": "55526648-3b1e-5362-9083-ebb3242da0e2",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 322,
+        "end": 330,
+        "text": "Supabase",
+        "candidate_type": "proper_name",
+        "origin": "parser",
+        "chain_id": "a387dcba-903d-5e2f-abb4-ea547bbae2a4",
+        "is_head": false
+      },
+      {
+        "candidate_id": "2859ac21-2d62-5f08-bb45-96401b929a54",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 12,
+        "end": 25,
+        "text": "a combination",
+        "candidate_type": "nominal",
+        "origin": "parser",
+        "chain_id": "0e7b0847-7914-5b33-bdc5-9f37bd66fbe7",
+        "is_head": true
+      },
+      {
+        "candidate_id": "5a884ba3-2344-5c72-9206-a8dec7898486",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 175,
+        "end": 181,
+        "text": "an MIT",
+        "candidate_type": "proper_name",
+        "origin": "parser",
+        "chain_id": "dce6b520-130c-5566-a421-1a1b93daa234",
+        "is_head": true
+      },
+      {
+        "candidate_id": "56a8b5bd-8c5a-594c-a49b-1789a56b330b",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 29,
+        "end": 46,
+        "text": "open source tools",
+        "candidate_type": "nominal",
+        "origin": "parser",
+        "chain_id": "dce6b520-130c-5566-a421-1a1b93daa234",
+        "is_head": false
+      },
+      {
+        "candidate_id": "6a00ab77-f3fd-5472-9611-a60650966382",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 94,
+        "end": 132,
+        "text": "enterprise-grade, open source products",
+        "candidate_type": "nominal",
+        "origin": "parser",
+        "chain_id": "dce6b520-130c-5566-a421-1a1b93daa234",
+        "is_head": false
+      },
+      {
+        "candidate_id": "a9cd0f02-ae00-5f0c-8b1a-331928cc68ad",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 196,
+        "end": 219,
+        "text": "equivalent open license",
+        "candidate_type": "nominal",
+        "origin": "parser",
+        "chain_id": "dce6b520-130c-5566-a421-1a1b93daa234",
+        "is_head": false
+      },
+      {
+        "candidate_id": "5138d635-2e7e-5ac2-9f3c-4435e4e8c004",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 441,
+        "end": 458,
+        "text": "open source tools",
+        "candidate_type": "nominal",
+        "origin": "parser",
+        "chain_id": "dce6b520-130c-5566-a421-1a1b93daa234",
+        "is_head": false
+      },
+      {
+        "candidate_id": "137facaa-1e12-5f85-924a-669c779b98eb",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 48,
+        "end": 50,
+        "text": "We",
+        "candidate_type": "pronoun",
+        "origin": "parser",
+        "chain_id": "91bf22da-aa34-5154-8bfe-fc57a9781b20",
+        "is_head": true
+      },
+      {
+        "candidate_id": "04776500-9bd7-5b7d-b553-ccd82d8e0103",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 221,
+        "end": 223,
+        "text": "we",
+        "candidate_type": "pronoun",
+        "origin": "parser",
+        "chain_id": "91bf22da-aa34-5154-8bfe-fc57a9781b20",
+        "is_head": false
+      },
+      {
+        "candidate_id": "3f101f20-04f7-513f-902f-1b14e8fd4d22",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 283,
+        "end": 285,
+        "text": "we",
+        "candidate_type": "pronoun",
+        "origin": "parser",
+        "chain_id": "91bf22da-aa34-5154-8bfe-fc57a9781b20",
+        "is_head": false
+      },
+      {
+        "candidate_id": "d715948a-f092-5f63-802c-d802cb259f2b",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 63,
+        "end": 75,
+        "text": "the features",
+        "candidate_type": "definite_description",
+        "origin": "model",
+        "chain_id": "53a17d77-0058-56a0-b903-dfdb04686d3b",
+        "is_head": true
+      },
+      {
+        "candidate_id": "802a2f43-8891-5283-8df7-bcca2677857f",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 79,
+        "end": 87,
+        "text": "Firebase",
+        "candidate_type": "proper_name",
+        "origin": "parser",
+        "chain_id": "a1736f3c-2bfd-5eea-9a64-ac54b8ac3a93",
+        "is_head": true
+      },
+      {
+        "candidate_id": "cbb499aa-2b23-5a4d-b92d-1bf4a4a676c6",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 358,
+        "end": 366,
+        "text": "Firebase",
+        "candidate_type": "proper_name",
+        "origin": "parser",
+        "chain_id": "a1736f3c-2bfd-5eea-9a64-ac54b8ac3a93",
+        "is_head": false
+      },
+      {
+        "candidate_id": "ed6cef2f-b9e5-54fa-acbb-98181b953195",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 400,
+        "end": 408,
+        "text": "Firebase",
+        "candidate_type": "proper_name",
+        "origin": "parser",
+        "chain_id": "a1736f3c-2bfd-5eea-9a64-ac54b8ac3a93",
+        "is_head": false
+      },
+      {
+        "candidate_id": "e09d4272-ba3f-5dd3-9bad-d032a28e4cc9",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 137,
+        "end": 146,
+        "text": "the tools",
+        "candidate_type": "definite_description",
+        "origin": "parser",
+        "chain_id": "472f92ab-78fd-5abc-867d-7cbab5427398",
+        "is_head": true
+      },
+      {
+        "candidate_id": "6c414801-7dbb-5bb6-baa7-037a7b68ac02",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 151,
+        "end": 162,
+        "text": "communities",
+        "candidate_type": "nominal",
+        "origin": "parser",
+        "chain_id": "c2064821-46ba-5d9c-aec8-d761ab783d94",
+        "is_head": true
+      },
+      {
+        "candidate_id": "bb7ced53-5e51-5ee7-b58a-6eeb24675f50",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 245,
+        "end": 254,
+        "text": "that tool",
+        "candidate_type": "definite_description",
+        "origin": "parser",
+        "chain_id": "af67b573-7b02-5e15-aee0-4239698c58de",
+        "is_head": true
+      },
+      {
+        "candidate_id": "4b077d26-a504-5199-8fc1-16405f119266",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 259,
+        "end": 267,
+        "text": "the tool",
+        "candidate_type": "definite_description",
+        "origin": "model",
+        "chain_id": "af67b573-7b02-5e15-aee0-4239698c58de",
+        "is_head": false
+      },
+      {
+        "candidate_id": "08217cbe-30dc-5e2e-a9d2-5cb6c0af6801",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 296,
+        "end": 307,
+        "text": "open source",
+        "candidate_type": "nominal",
+        "origin": "parser",
+        "chain_id": "03800c02-e65c-52df-8f0f-d0262436d435",
+        "is_head": true
+      },
+      {
+        "candidate_id": "19034e72-ff0c-5142-9971-6a8acc127b54",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 308,
+        "end": 310,
+        "text": "it",
+        "candidate_type": "pronoun",
+        "origin": "parser",
+        "chain_id": "a533448a-a9f4-5f3d-a01d-d14c88556777",
+        "is_head": true
+      },
+      {
+        "candidate_id": "234662d9-66a7-5787-8b81-1402cc13e488",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 311,
+        "end": 320,
+        "text": "ourselves",
+        "candidate_type": "pronoun",
+        "origin": "parser",
+        "chain_id": "71f2e591-5191-578a-94c3-4a1abf169f8d",
+        "is_head": true
+      },
+      {
+        "candidate_id": "4d49b612-d26a-5ed7-9182-9f7432efc6e9",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 338,
+        "end": 354,
+        "text": "a 1-to-1 mapping",
+        "candidate_type": "nominal",
+        "origin": "parser",
+        "chain_id": "8802754b-5297-592d-8da7-bf32580f71c8",
+        "is_head": true
+      },
+      {
+        "candidate_id": "596441cb-ae67-52bf-a0f3-2513f2e6af67",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 368,
+        "end": 371,
+        "text": "Our",
+        "candidate_type": "pronoun",
+        "origin": "parser",
+        "chain_id": "04513c7d-5073-557b-be09-ff50eac6237a",
+        "is_head": true
+      },
+      {
+        "candidate_id": "f866294d-bdb5-50fe-964c-91273d34dffe",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 368,
+        "end": 375,
+        "text": "Our aim",
+        "candidate_type": "nominal",
+        "origin": "parser",
+        "chain_id": "707cab89-8642-5c46-8941-dc165da3ce13",
+        "is_head": true
+      },
+      {
+        "candidate_id": "f4c6578a-64c6-5d07-b71b-bc6589a57842",
+        "episode_id": "6680d019-8ad1-571a-ba1c-b0bac7fc3559",
+        "start": 387,
+        "end": 397,
+        "text": "developers",
+        "candidate_type": "nominal",
+        "origin": "parser",
+        "chain_id": "2b5883c0-61be-5103-ba73-a532b8f5bcb9",
+        "is_head": true
+      }
+    ]
+  }
+]
