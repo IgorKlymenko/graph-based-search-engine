@@ -159,6 +159,65 @@ def resolve_chains(annotated: dict) -> list[list[SP.Span]]:
     return SP.union_identical_names(chains)
 
 
+def content_key(spans: list[SP.Span]) -> str | None:
+    """Fingerprint of what a chain contains, for matching it across re-extraction.
+
+    ``chain_id`` is a surrogate — re-extracting an episode mints a new one even
+    when the model produced exactly the same grouping, and the ``entity_id`` that
+    cost pair scoring and review calls to determine would go with it. Matching on
+    ``(episode_id, content_key)`` instead lets an unchanged chain keep it.
+
+    Hashes only the surfaces that survive ``is_identifying``, because those are
+    the ones stored in ``chain_surfaces``. Hashing the raw span set would drift
+    the moment the filter changes, and every chain in the corpus would look new.
+
+    None when nothing identifying is left: that chain is not stored at all.
+    """
+    surfaces = sorted({s.text for s in spans if SP.is_identifying(s.text)})
+    return E.sha1_text("|".join(surfaces)) if surfaces else None
+
+
+def chain_id_for(episode_id: str, key: str) -> str:
+    """Identity from *what the chain contains*, not from which span leads it.
+
+    This was keyed on the head span's offsets, which is the model's opinion about
+    which surface is canonical rather than a property of the chain: the same
+    grouping with a different head hashed to a different id, and ``pick_head``'s
+    fallback could change the answer on its own. ``content_key`` is the thing
+    that actually distinguishes one chain from another.
+
+    The database goes further and makes the primary key a plain surrogate, with
+    ``content_key`` as a separate unique — because a content-derived key still
+    churns when a chain gains one surface, and anything referencing it dangles.
+    Here the derivation is kept so the JSON store stays idempotent: re-extracting
+    an episode that produces the same chains rewrites the same rows.
+    """
+    return E.stable_uuid(f"chain:{episode_id}|{key}")
+
+
+def build_chains(episode_id: str, chains: list[list[SP.Span]]) -> list[dict]:
+    """One record per chain — the unit stage 4 clusters and the DB stores.
+
+    ``entity_id`` is left unset: nothing knows it until the whole corpus has been
+    compared, and a chain that never merges keeps it null while its own entity is
+    created around it.
+    """
+    records: list[dict] = []
+    for chain in chains:
+        key = content_key(chain)
+        if key is None:
+            continue  # every surface was scaffolding; no chain, no entity
+        head = chain[0]
+        records.append({
+            "chain_id": chain_id_for(episode_id, key),
+            "episode_id": episode_id,
+            "content_key": key,
+            "head_surface": head.text,
+            "entity_id": None,
+        })
+    return records
+
+
 def build_candidates(episode_id: str, chains: list[list[SP.Span]]) -> list[dict]:
     """One record per span, addressed by offsets into the immutable episode text.
 
@@ -167,8 +226,12 @@ def build_candidates(episode_id: str, chains: list[list[SP.Span]]) -> list[dict]
     """
     records: list[dict] = []
     for chain in chains:
+        key = content_key(chain)
+        if key is None:
+            continue  # a chain of pure scaffolding is not stored, so nor are
+                      # its spans -- an unlinked pronoun refers to nothing
         head = chain[0]
-        chain_id = E.stable_uuid(f"chain:{episode_id}|{head.start}|{head.end}")
+        chain_id = chain_id_for(episode_id, key)
         for span in chain:
             records.append({
                 "candidate_id": E.stable_uuid(
@@ -212,8 +275,8 @@ def live_candidates(store: dict) -> list[dict]:
 
 def process_episode(
     store: dict, episode_id: str, *, model: str, retries: int = 1
-) -> tuple[list[dict], dict | None]:
-    """Annotate one episode. Returns ``(records, failure)`` — never raises.
+) -> tuple[list[dict], list[dict], dict | None]:
+    """Annotate one episode. Returns ``(candidates, chains, failure)`` — never raises.
 
     An undeclared span id is a protocol violation, not bad luck: retry once,
     then fail the episode loudly. A failed episode leaves ``extracted_at``
@@ -228,11 +291,12 @@ def process_episode(
             last = exc
             continue  # the model broke the id contract — one more chance
         except Exception as exc:  # noqa: BLE001 — API failure for this episode
-            return [], {"episode_id": episode_id, "stage": "chains",
-                        "attempt": attempt, "error": repr(exc)}
-        records = build_candidates(episode_id, resolve_chains(annotated))
-        return records, None
-    return [], {"episode_id": episode_id, "stage": "validate",
+            return [], [], {"episode_id": episode_id, "stage": "chains",
+                            "attempt": attempt, "error": repr(exc)}
+        resolved = resolve_chains(annotated)
+        return (build_candidates(episode_id, resolved),
+                build_chains(episode_id, resolved), None)
+    return [], [], {"episode_id": episode_id, "stage": "validate",
                 "attempts": retries + 1, "error": repr(last)}
 
 
@@ -269,10 +333,12 @@ def run(
         }
         for future in as_completed(futures):
             episode_id = futures[future]
-            records, failure = future.result()
+            records, chain_records, failure = future.result()
             with lock:
                 for record in records:
                     store["candidates"][record["candidate_id"]] = record
+                for chain in chain_records:
+                    store.setdefault("chains", {})[chain["chain_id"]] = chain
                 if failure is None:
                     store["episodes"][episode_id]["extracted_at"] = (
                         datetime.now(timezone.utc).isoformat()

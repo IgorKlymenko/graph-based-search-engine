@@ -3,8 +3,7 @@ CREATE TABLE public.chain_surfaces (
     chain_id   UUID NOT NULL,
     surface    TEXT NOT NULL,
     is_head    BOOLEAN NOT NULL DEFAULT false,
-    n_mentions INT NOT NULL DEFAULT 1, --a surface said five times is more central than one said once
-    FOREIGN KEY (tenant_id, chain_id)
+check     FOREIGN KEY (tenant_id, chain_id)
         REFERENCES public.chains (tenant_id, id) ON DELETE CASCADE,
     FOREIGN KEY (tenant_id, surface)
         REFERENCES public.surfaces (tenant_id, surface),

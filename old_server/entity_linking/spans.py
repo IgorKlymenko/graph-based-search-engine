@@ -36,6 +36,43 @@ _DEFINITE = {"the", "this", "that", "these", "those"}
 _HAS_LETTER = re.compile(r"[^\W\d_]")
 _OPEN, _CLOSE = "⟦", "⟧"
 
+# Words that cannot name anything on their own: pronouns, bare determiners,
+# quantifiers, and number words. The list is closed on purpose — the derived
+# ``candidate_type`` is not reliable enough to filter on, having typed "syncs"
+# and "both" as pronouns in real runs.
+_NON_IDENTIFYING = frozenset("""
+i me my mine myself we us our ours ourselves you your yours yourself yourselves
+he him his himself she her hers herself it its itself they them their theirs
+themselves one oneself
+this that these those which who whom whose what whatever whoever whichever
+the a an
+both all some any each every either neither few many much several most none no
+other others another same such
+zero one two three four five six seven eight nine ten eleven twelve
+first second third fourth fifth last next previous
+""".split())
+
+
+def is_identifying(text: str) -> bool:
+    """Can this surface name something, or is it purely grammatical scaffolding?
+
+    False only when *every* token is a function word or a bare numeral, so the
+    filter removes "the", "three", "it", "both" and keeps anything carrying a
+    content word. That line is deliberate rather than aesthetic: "frozen" or
+    "the freeze" may look thin, but in a corpus about a database they are real
+    query keys with implied meaning, and a surface a user might type is worth
+    indexing however unglamorous it looks. "the" is not a query key in any
+    corpus.
+
+    Kept: "frozen", "the freeze", "database", "GPT-4", "Q3", "the pilot tenant".
+    Dropped: "the", "three", "it", "they", "both", "2023", "this".
+    """
+    tokens = re.findall(r"[^\W_]+", text.lower())
+    if not tokens:
+        return False
+    return not all(token in _NON_IDENTIFYING or token.isdigit()
+                   for token in tokens)
+
 
 # Markdown scaffolding that carries no meaning for a parser. Line-leading only,
 # so a hyphen inside "auto-enrollment" survives; pipes are blanked anywhere,

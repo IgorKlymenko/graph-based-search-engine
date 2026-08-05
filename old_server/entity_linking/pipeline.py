@@ -29,6 +29,7 @@ from entity_linking import chains as CH  # noqa: E402
 from entity_linking import encoding as EN  # noqa: E402
 from entity_linking import episodes as EP  # noqa: E402
 from entity_linking import pairing as PR  # noqa: E402
+from entity_linking import spans as SP  # noqa: E402
 from entity_linking.prompts import (  # noqa: E402
     ENTITY_CHOICE_PROMPT,
     ENTITY_CHOICE_SCHEMA,
@@ -118,6 +119,17 @@ def _context_vectors(store: dict, by_chain: dict[str, list[dict]]) -> dict:
     return out
 
 
+def _head_of(group: list[dict]) -> dict:
+    """The chain's head, re-picked when the model's choice was filtered out.
+
+    Stage 2 may have made a pronoun the head; once it is gone the chain still
+    needs a name, and the longest remaining surface is the same fallback
+    ``spans.pick_head`` uses.
+    """
+    return next((c for c in group if c["is_head"]),
+                max(group, key=lambda c: len(c["text"])))
+
+
 def encode(store: dict, *, context: bool = True) -> list[PR.ChainRecord]:
     """Stage 3 — one ChainRecord per live chain, carrying both vector kinds."""
     live = [c for c in store["candidates"].values()
@@ -126,15 +138,28 @@ def encode(store: dict, *, context: bool = True) -> list[PR.ChainRecord]:
     for candidate in live:
         by_chain.setdefault(candidate["chain_id"], []).append(candidate)
 
-    heads = sorted({next(c for c in group if c["is_head"])["text"]
-                    for group in by_chain.values()
-                    if any(c["is_head"] for c in group)})
+    # A pronoun is a legitimate chain member -- it is how the model linked the
+    # mentions -- but it is not a name, and letting it into `surfaces` makes two
+    # chains that both say "it" score string_similarity 1.0 and lets
+    # ("Sarah Chen", "she") count as an alias. Candidates keep them; identity
+    # does not. `is_identifying` also drops "the", "three" and friends.
+    identifying: dict[str, list[dict]] = {}
+    dropped_chains = dropped_surfaces = 0
+    for chain_id, group in by_chain.items():
+        kept = [c for c in group if SP.is_identifying(c["text"])]
+        dropped_surfaces += len(group) - len(kept)
+        if kept:
+            identifying[chain_id] = kept
+        else:
+            dropped_chains += 1  # nothing left that could name anything
+
+    heads = sorted({_head_of(group)["text"] for group in identifying.values()})
     vectors = _name_vectors(heads) if heads else {}
     contexts = _context_vectors(store, by_chain) if context else {}
 
     records: list[PR.ChainRecord] = []
-    for chain_id, group in by_chain.items():
-        head = next((c for c in group if c["is_head"]), group[0])
+    for chain_id, group in identifying.items():
+        head = _head_of(group)
         records.append(PR.ChainRecord(
             chain_id=chain_id, episode_id=head["episode_id"], head=head["text"],
             surfaces=frozenset(c["text"] for c in group),
@@ -142,7 +167,9 @@ def encode(store: dict, *, context: bool = True) -> list[PR.ChainRecord]:
             name_vector=vectors.get(head["text"]),
             context_vector=contexts.get(chain_id)))
     print(f"[3/4] encode: {len(records)} chains, {len(heads)} distinct names, "
-          f"{len(contexts)} context vectors")
+          f"{len(contexts)} context vectors "
+          f"({dropped_surfaces} non-identifying surfaces dropped, "
+          f"{dropped_chains} chains left with none)")
     return records
 
 

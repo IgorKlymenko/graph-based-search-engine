@@ -190,7 +190,7 @@ class FileDiff(NamedTuple):
 
 
 def empty_store() -> dict:
-    return {"files": {}, "episodes": {}, "candidates": {}}
+    return {"files": {}, "episodes": {}, "candidates": {}, "chains": {}}
 
 
 def load_store(path: Path) -> dict:
@@ -200,6 +200,7 @@ def load_store(path: Path) -> dict:
     store.setdefault("files", {})
     store.setdefault("episodes", {})
     store.setdefault("candidates", {})
+    store.setdefault("chains", {})
     return store
 
 

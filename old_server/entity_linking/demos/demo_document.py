@@ -98,6 +98,8 @@ def extract(store: dict, episodes: list[dict], *, model: str) -> dict:
         records = CH.build_candidates(episode_id, resolved)
         for record in records:
             store["candidates"][record["candidate_id"]] = record
+        for chain in CH.build_chains(episode_id, resolved):
+            store.setdefault("chains", {})[chain["chain_id"]] = chain
         store["episodes"][episode_id]["extracted_at"] = "demo"
 
         step["model_raw"] = {
@@ -112,6 +114,7 @@ def extract(store: dict, episodes: list[dict], *, model: str) -> dict:
             for chain in resolved
         ]
         step["candidates"] = records
+        step["chains_stored"] = CH.build_chains(episode_id, resolved)
         per_episode.append(step)
 
     failed = [s["episode_id"] for s in per_episode if "failure" in s]
