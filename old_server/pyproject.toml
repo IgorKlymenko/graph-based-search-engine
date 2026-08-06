@@ -57,6 +57,7 @@ dev = [
     "ipykernel>=7.3.0",
     "ipywidgets>=8.1.8",
     "lxml>=6.1.1",
+    "psycopg[binary]>=3.3.4",
     "pyright>=1.1.411",
     "pytest-asyncio>=1.4.0",
     "pytest-benchmark>=5.2.3",

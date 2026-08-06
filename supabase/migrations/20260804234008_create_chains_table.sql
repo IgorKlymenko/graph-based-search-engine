@@ -15,7 +15,7 @@ CREATE TABLE public.chains (
 
 CREATE INDEX ON public.chains (episode_id); --"all chains of this episode" during sync
 CREATE INDEX ON public.chains (tenant_id, entity_id); --entity -> chains -> episodes
-CREATE UNIQUE INDEX ON publigooc.chains (tenant_id, episode_id, content_key); --same chain twice in one episode is a bug
+CREATE UNIQUE INDEX ON public.chains (tenant_id, episode_id, content_key); --same chain twice in one episode is a bug
 
 ALTER TABLE public.chains ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chains FORCE ROW LEVEL SECURITY;
