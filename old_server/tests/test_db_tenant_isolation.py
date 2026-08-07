@@ -315,3 +315,176 @@ def test_the_roles_carry_a_statement_timeout_for_when_they_can_log_in(connection
         for role, config in cur.fetchall():
             assert "statement_timeout" in config, f"{role} has no ceiling set"
             assert "idle_in_transaction_session_timeout" in config, role
+
+
+# ── the login roles: where the ceilings and the RLS floor actually land ───────
+
+LOGIN_PASSWORD = "localdev-only"
+
+
+@pytest.fixture(scope="module")
+def login_url(connection):
+    """A connection string for app_connector_login.
+
+    The migration creates it without a password on purpose -- a password in a
+    migration lands in git and in the statement log. Setting one here is a local
+    test convenience; production sets it from the secret store.
+    """
+    with connection.cursor() as cur:
+        cur.execute("SELECT to_regrole('app_connector_login') IS NOT NULL")
+        if not cur.fetchone()[0]:
+            pytest.skip("login roles not present")
+        cur.execute(f"ALTER ROLE app_connector_login PASSWORD '{LOGIN_PASSWORD}'")
+    parsed = DB_URL.split("@", 1)[1]
+    return f"postgresql://app_connector_login:{LOGIN_PASSWORD}@{parsed}"
+
+
+def test_the_ceiling_applies_at_login_where_set_role_could_not(login_url):
+    """The whole reason these roles exist.
+
+    ALTER ROLE ... SET is applied at login. Set on a NOLOGIN role reached by
+    SET ROLE it reads back as 0 -- the limit silently does not exist. Set on the
+    role that authenticates, it holds, and SET ROLE afterwards does not reset it.
+    """
+    with psycopg.connect(login_url, autocommit=True) as conn, conn.cursor() as cur:
+        cur.execute("SHOW statement_timeout")
+        assert cur.fetchone()[0] == "30s"
+        cur.execute("SHOW idle_in_transaction_session_timeout")
+        assert cur.fetchone()[0] == "10s"
+
+
+def test_the_login_role_does_not_bypass_rls(login_url):
+    """postgres carries BYPASSRLS, so a forgotten SET ROLE there sees everything.
+
+    The floor here is a role that cannot bypass anything.
+    """
+    with psycopg.connect(login_url, autocommit=True) as conn, conn.cursor() as cur:
+        cur.execute("SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user")
+        assert cur.fetchone()[0] is False
+
+
+def test_forgetting_set_role_fails_loudly(login_url):
+    """NOINHERIT is what makes the mistake safe.
+
+    With INHERIT the login role would hold app_connector's privileges
+    automatically: SET ROLE becomes optional, current_setting('role') stays
+    'none', and the resolver -- which reads it to tell ingest from connector --
+    would misresolve instead of denying. Here the role can do nothing but
+    connect until it names one.
+    """
+    with psycopg.connect(login_url, autocommit=True) as conn, conn.cursor() as cur:
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            cur.execute("SELECT count(*) FROM files")
+
+
+def test_after_set_role_it_works_and_keeps_the_ceiling(login_url, connection):
+    with connection.cursor() as cur:  # seed as owner
+        cur.execute("INSERT INTO connector_installations"
+                    " (source, external_id, tenant_id, token_ref)"
+                    " VALUES ('slack', %s, %s, 'ref') ON CONFLICT DO NOTHING",
+                    (LIVE_TEAM, ACME))
+    with psycopg.connect(login_url) as conn, conn.cursor() as cur:
+        cur.execute("SET LOCAL ROLE app_connector")
+        cur.execute("SELECT set_config('app.connector', 'slack', true)")
+        cur.execute("SELECT set_config('app.workspace_id', %s, true)", (LIVE_TEAM,))
+        cur.execute("SELECT tenant_id FROM files")
+        assert {r[0] for r in cur.fetchall()} == {uuid.UUID(ACME)}
+        cur.execute("SHOW statement_timeout")
+        assert cur.fetchone()[0] == "30s", "SET ROLE must not reset the ceiling"
+
+
+# ── internal.events: dedupe at ACK, idempotent claim at /work ────────────────
+
+EVENT = "Ev_TEST_1"
+
+
+@pytest.fixture(scope="module", autouse=True)
+def clean_events(connection):
+    yield
+    with connection.cursor() as cur:
+        cur.execute("DELETE FROM internal.events WHERE external_id = ANY(%s)",
+                    ([LIVE_TEAM, GONE_TEAM],))
+
+
+def ack(connection, event_id, workspace=LIVE_TEAM, retry=0):
+    """The ACK path: one insert, and a rowcount of zero means 'already seen'."""
+    with connection.transaction():
+        cur = connection.cursor()
+        cur.execute("SET LOCAL ROLE app_ack")
+        cur.execute("SELECT set_config('app.connector', 'slack', true)")
+        cur.execute("SELECT set_config('app.workspace_id', %s, true)", (workspace,))
+        cur.execute(
+            "INSERT INTO internal.events (source, external_id, event_id,"
+            " payload, retry_num) VALUES ('slack', %s, %s, %s, %s)"
+            " ON CONFLICT DO NOTHING",
+            (workspace, event_id, '{"t":"x"}', retry))
+        return cur.rowcount
+
+
+def claim(connection, event_id, workspace=LIVE_TEAM):
+    """The worker path: one conditional update, atomic, no lock."""
+    with connection.transaction():
+        cur = connection.cursor()
+        cur.execute("SET LOCAL ROLE app_connector")
+        cur.execute("SELECT set_config('app.connector', 'slack', true)")
+        cur.execute("SELECT set_config('app.workspace_id', %s, true)", (workspace,))
+        cur.execute(
+            "UPDATE internal.events SET status = 'processing', started_at = now()"
+            " WHERE source = 'slack' AND external_id = %s AND event_id = %s"
+            "   AND status IN ('queued','failed') RETURNING payload",
+            (workspace, event_id))
+        return cur.fetchall()
+
+
+def test_a_slack_retry_is_deduped_by_the_primary_key(connection):
+    """Idempotency as a constraint rather than application discipline."""
+    assert ack(connection, EVENT) == 1
+    assert ack(connection, EVENT, retry=1) == 0, "the retry created a second row"
+
+
+def test_the_claim_is_idempotent_under_duplicate_delivery(connection):
+    """Cloud Tasks will deliver twice; only one worker may take the work."""
+    ack(connection, "Ev_claim")
+    assert len(claim(connection, "Ev_claim")) == 1
+    assert claim(connection, "Ev_claim") == [], "a second worker also claimed it"
+
+
+def test_the_ack_role_cannot_reach_the_corpus(connection):
+    """The whole reason it is not a member of app_user.
+
+    The ACK endpoint is publicly reachable because Slack posts to it. A bug
+    there running as app_connector could read the workspace's entire corpus.
+    """
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        run(connection, "SELECT count(*) FROM files",
+            role="app_ack", connector="slack", workspace=LIVE_TEAM)
+
+
+def test_the_ack_role_cannot_even_read_events_back(connection):
+    """Insert-only: the dedupe needs a rowcount, never a row."""
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        run(connection, "SELECT count(*) FROM internal.events",
+            role="app_ack", connector="slack", workspace=LIVE_TEAM)
+
+
+def test_the_worker_cannot_invent_an_event(connection):
+    """An event that was never ACKed must not appear from the work side."""
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        run(connection,
+            "INSERT INTO internal.events (source, external_id, event_id)"
+            " VALUES ('slack', %s, 'Ev_forged')", (LIVE_TEAM,),
+            role="app_connector", connector="slack", workspace=LIVE_TEAM)
+
+
+def test_events_are_walled_by_workspace_not_tenant(connection):
+    """The tenant is unknown at ACK time, so the workspace is the isolation key."""
+    ack(connection, "Ev_walled")
+    rows = run(connection, "SELECT count(*) FROM internal.events",
+               role="app_connector", connector="slack", workspace=GONE_TEAM)
+    assert rows[0][0] == 0
+
+
+def test_events_deny_with_no_workspace_declared(connection):
+    rows = run(connection, "SELECT count(*) FROM internal.events",
+               role="app_connector")
+    assert rows[0][0] == 0

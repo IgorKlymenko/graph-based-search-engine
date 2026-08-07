@@ -83,6 +83,119 @@ This document contains critical information about working with this codebase. Fo
 - `daemon.py`: Main daemon
 [etc... fill in here]
 
+## Database access — non-negotiable rules for any client
+
+The database enforces tenant isolation, but only if the client sets up each
+request correctly. These are the parts the schema cannot enforce for you.
+Isolation is verified by `old_server/tests/test_db_tenant_isolation.py` (36
+tests); reasoning is in `ADRs/supabase/security.md`.
+
+### Every request is one transaction, in this shape
+
+```python
+async with pool.connection() as conn:          # logged in as app_*_login
+    async with conn.transaction():
+        await conn.execute("SET LOCAL ROLE app_connector")
+        await conn.execute(
+            "SELECT set_config('app.connector', %s, true)", (source,))
+        await conn.execute(
+            "SELECT set_config('app.workspace_id', %s, true)", (team_id,))
+        ...                                     # real work here
+```
+
+**`SET LOCAL`, never `SET`.** Both the role and the context. A session-level
+setting outlives the transaction, and on a pooled connection the next request
+inherits the previous caller's tenant. This is the single worst bug available
+here: it works in dev (session pooling) and leaks in production (transaction
+pooling).
+
+**One transaction.** The role, the context and the queries. Context dies at
+COMMIT by design — reusing a connection without re-declaring is a denied query,
+not a stale one.
+
+**Parameterise `set_config`.** The workspace id arrives from an external system.
+Never interpolate it into SQL.
+
+### Pick the right role
+
+| Role | Use | Declares |
+|---|---|---|
+| `app_connector` | anything with a workspace (Slack, later Drive/Notion) | `app.connector`, `app.workspace_id` |
+| `app_ingest` | uploads, backfills — no workspace to derive from | `app.tenant_id` |
+| `app_ack` | the public webhook endpoint, nothing else | `app.connector`, `app.workspace_id` |
+
+`app_connector` **cannot** claim a tenant — setting `app.tenant_id` on it
+resolves to NULL and every query returns nothing. That is deliberate: the
+database resolves the tenant from `connector_installations`, so a wrong tenant
+computed in application code is caught rather than honoured.
+
+`app_ack` cannot read the corpus, or even read events back. Its whole job is one
+insert.
+
+**Never connect as `postgres`.** It carries `BYPASSRLS`, so nothing is walled.
+The login roles do not, which is the point of them.
+
+**Login roles are created without a password** — set it from the secret store,
+never in a migration. Forgetting `SET ROLE` fails loudly (the login roles are
+`NOINHERIT`); do not "fix" that by granting INHERIT.
+
+### Write ordering
+
+Extraction output must land in **one transaction**, in FK order:
+
+```
+surfaces  →  chains  →  chain_surfaces
+```
+
+A partial write leaves chains with no surfaces, and the evidence queries then
+return *silently wrong* answers — `alias_hit` simply says no. Failing loudly is
+not the default here; correctness depends on atomicity.
+
+### Webhook handling
+
+ACK path — dedupe is the primary key, not a lookup:
+
+```sql
+INSERT INTO internal.events (source, external_id, event_id, payload, retry_num)
+VALUES (...) ON CONFLICT DO NOTHING;
+-- rowcount 0 ⇒ already seen. Return 200, enqueue nothing.
+```
+
+Do not `SELECT` first to check — that is a race. Worker path — claim with one
+conditional update:
+
+```sql
+UPDATE internal.events SET status = 'processing', started_at = now()
+ WHERE source = $1 AND external_id = $2 AND event_id = $3
+   AND status IN ('queued','failed')
+RETURNING payload;
+-- rowcount 0 ⇒ another worker has it, or it is done. Stop.
+```
+
+Cloud Tasks *will* deliver twice. This is what makes that safe without a lock.
+
+### Reading and writing entities
+
+- Read a name with `public.entity_display_name(tenant, entity)`. Do not read
+  `display_name` directly — it is a human override and is usually NULL.
+- Write `display_name` **only** when a person corrected it. Re-clustering must
+  have nothing to overwrite.
+- `chains.entity_id` is nullable. A chain without an entity is normal (not yet
+  clustered, or a contested name deliberately withheld), not an error.
+
+### Limits to design around
+
+`statement_timeout` 30s (5s on `app_ack`), `idle_in_transaction_session_timeout`
+10s, connection limits 30/10/40. Long operations must be chunked; these are
+blast-radius caps, so hitting one should read as a bug rather than as load.
+
+### Still unverified
+
+Behaviour under the **transaction pooler**. `SET LOCAL` is correct for it, but
+only direct sessions have been exercised. Verify before the first production
+deploy — this is exactly where a tenant leak would appear and not be caught in
+dev.
+
 ## Pull Requests
 
 - Create a detailed message of what changed. Focus on the high level description of

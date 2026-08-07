@@ -19,8 +19,11 @@ to build yet) · **Open** (identified, not yet decided)
 **Context.** The graph could live in a native graph store (Neo4j Aura) or in
 the Postgres instance already used for tenancy and documents.
 
-**Decision.** Postgres, as `nodes` / `edges` tables with denormalized
-`tenant_id`.
+**Decision.** Postgres, with denormalized `tenant_id` throughout.
+
+**Amended (24).** The tables are `entities`, `chains`, `chain_surfaces` and
+`surfaces`, and there is no `edges` table at all — adjacency is derived from a
+self-join on `chains`. The reasoning below is unaffected; only the nouns are.
 
 **Why.** Three properties Neo4j can't offer here: RLS enforces tenant
 isolation at the storage layer instead of in application code; edges commit in
@@ -39,7 +42,11 @@ cross-tenant analytics becomes a product requirement.
 
 
 
-### 2. PPR runs in application memory over a CSR snapshot — *Accepted*
+### 2. PPR runs in application memory over a CSR snapshot — *Superseded by 24*
+
+> The walk moved to a managed service and the edge set became derived rather
+> than stored, which removes the snapshot, its version counter and its pointer
+> table together. Entries 2–5 are kept for the reasoning, not the conclusion.
 
 **Context.** Iterative PPR inside Postgres (driver loop or recursive CTE) is
 100–1000× slower than in-memory — each round joins the whole edge table with no
@@ -65,7 +72,7 @@ measurement saying otherwise.
 
 
 
-### 3. CSR snapshots are built at ingestion and stored as immutable blobs — *Accepted*
+### 3. CSR snapshots are built at ingestion and stored as immutable blobs — *Superseded by 24*
 
 **Context.** The serving path runs on scale-to-zero instances. A cache built at
 query time dies with the instance, and the build is CPU-bound work that cannot
@@ -90,7 +97,7 @@ is harmless and cleanable.
 
 
 
-### 4. `graph_version` is the cache-invalidation signal, bumped in-transaction — *Accepted*
+### 4. `graph_version` is the cache-invalidation signal, bumped in-transaction — *Superseded by 24*
 
 **Decision.** Ingestion bumps a per-tenant version counter in the *same
 transaction* as the edge write, ideally via an `AFTER` trigger. Consumers
@@ -110,7 +117,7 @@ itself.
 
 
 
-### 5. `graphs` is a snapshot pointer table, not a container — *Accepted*
+### 5. `graphs` is a snapshot pointer table, not a container — *Superseded by 24*
 
 **Decision.** `graphs` holds `(tenant_id, graph_version, blob_path, built_at)`.
 Nodes and edges reference `tenant_id`, **not** `graph_id`.
@@ -326,7 +333,12 @@ first messages race.
 ### 15. Slack identity is workspace-scoped — *Accepted*
 
 **Decision.** `slack_users` has composite primary key
-`(slack_team_id, slack_user_id)`; `slack_teams` is keyed by the Slack team ID.
+`(slack_team_id, slack_user_id)`.
+
+**Amended.** `slack_teams` is gone; installs live in `connector_installations`,
+keyed `(source, external_id)` so Notion and Drive need no new table. `slack_users`
+carries a `source` column fixed to `'slack'` by CHECK, purely so it can reference
+that composite key. See `security.md` entries 4–5.
 
 **Why.** Slack user IDs are scoped to a workspace. The same human in two
 workspaces has two Slack IDs and gets two rows pointing at one `user_id`.
@@ -337,8 +349,10 @@ workspaces has two Slack IDs and gets two rows pointing at one `user_id`.
 
 ### 16. Bot tokens live in a secret manager; only a reference is stored — *Accepted*
 
-**Decision.** `slack_teams.token_ref` holds a secret-manager path. The token
-itself is never in Postgres.
+**Decision.** `connector_installations.token_ref` holds a secret-manager path.
+The token itself is never in Postgres, and the workers cannot read the column
+directly — only through a scoped `SECURITY DEFINER` function returning the row
+for the workspace they have already proven. See `security.md` entry 9.
 
 **Why.** A bot token grants full API access to a customer's workspace. In a
 column it is exposed to every backup, snapshot, database dump, log line, and
@@ -359,11 +373,12 @@ payload's `team_id`.
 
 ### 17. Uninstall is soft — *Accepted*
 
-**Decision.** `slack_teams.uninstalled_at` marks removal rather than deleting
-the row, preserving history.
+**Decision.** `connector_installations.uninstalled_at` marks removal rather than
+deleting the row, preserving history. Both tenant resolvers test
+`uninstalled_at IS NULL`, so access stops the moment the app is removed.
 
-**Open.** Reinstalls collide with the single-row-per-team primary key. Simplest
-resolution: reuse the row (clear `uninstalled_at`, update `token_ref`).
+**Open.** Reinstalls collide with the `(source, external_id)` primary key.
+Simplest resolution: reuse the row (clear `uninstalled_at`, update `token_ref`).
 Alternative if full install history is wanted: surrogate PK plus
 `UNIQUE (id) WHERE uninstalled_at IS NULL`.
 
@@ -391,6 +406,10 @@ disaster: it becomes another door.
 
 **Also.** Grants gate objects, RLS gates rows, in that order. RLS refines
 access and never creates it — a policy on a table with no grant is inert.
+
+**Built out in `security.md`.** How the tenant is established, which role the
+server connects as, and what the database can and cannot verify. That log also
+records the several versions of this that did not work.
 
 ---
 
@@ -446,6 +465,150 @@ leak knowingly and document it.
 
 
 
+## Entity & graph layer
+
+Added after building the linker. Everything here is measured; the evals live in
+`old_server/entity_linking/demos/` and the numbers in `DATAFLOW.md`.
+
+### 24. The graph is derived from `chains`; there is no edges table — *Accepted*
+
+**Context.** Entries 2–5 assumed edges are stored and the walk runs in-process
+over a CSR snapshot rebuilt at ingestion.
+
+**Decision.** Two entities are joined when a chain of each sits in the same
+episode — a self-join on `chains`. The walk runs in a managed PPR service, fed a
+payload regenerated from that join.
+
+**Why.** Merges and splits stop being maintenance. Re-clustering updates one
+column, `chains.entity_id`, and every edge follows: nothing to migrate, nothing
+to invalidate, no second source of truth to drift. A stored edge table would be
+keyed on entity ids that churn every time clustering changes.
+
+**Weights are PMI, not counts.** Measured on a synthetic corpus where
+relatedness is true by construction: raw counts reach P@family 0.786 and *never*
+bridge two entities connected only through a third; `PMI × 1/(episode size)`
+reaches 0.983 with 87.5% bridging, on 58% fewer edges. Binary weights score
+**0.000** — with every edge equal the walk goes to the highest-degree node, which
+is reliably the least informative entity in the corpus.
+
+**Cost.** The payload is recomputed per push rather than incrementally
+maintained. `graph_version`, the CSR blob and the `graphs` pointer table all
+become moot; there is no in-process snapshot left to invalidate.
+
+---
+
+
+
+### 25. Identity is content-addressed at every level — *Accepted*
+
+**Decision.**
+
+```
+file_id    = uuid5(tenant_id | source | external_id)   -- path
+episode_id = uuid5(file_id | sha1(text))               -- content
+chain_id   = uuid5(episode_id | content_key)           -- content
+```
+
+**Why.** A document is a container that gets revised, so it keeps its identity
+across edits. An episode is a unit of content, so it keeps its identity when an
+edit *above* it moves it — keying on offsets would renumber every episode below
+any insertion, and re-extract paragraphs whose text never changed.
+
+**Cost, and the one place it is refused.** A content-derived key churns the
+moment content changes, and anything referencing it dangles. `chains` therefore
+uses a **surrogate** primary key with `content_key` as a separate unique: adding
+one surface to a chain updates the fingerprint in place and keeps the row id,
+its `chain_surfaces` children, and the `entity_id` that cost LLM review calls to
+determine. The in-memory store derives the id instead, because a dict key *is*
+its deduplication and there is no constraint to do that job.
+
+---
+
+
+
+### 26. Episodes carry no position — *Accepted*
+
+**Decision.** No `ordinal`, and no ordered `episode_ids` array on `files`.
+
+**Why.** Nothing in the pipeline reads order, so storing it meant maintaining a
+version-dependent field on every sync for a consumer that does not exist.
+
+**Cost, stated plainly.** Reading order is *not* recoverable from the database.
+Recovering it means re-splitting the document and matching on text — episodes are
+verbatim slices, so `doc.find(text)` is exact. One document read at query time,
+which is the right place to pay it. Do not reinstate an ordering column without
+a consumer that needs one.
+
+---
+
+
+
+### 27. Chains are the linking unit; surfaces are the lookup — *Accepted*
+
+**Decision.** `chains` (one per episode's worth of coreferent mentions) is what
+stage 4 clusters and what carries `entity_id`. `chain_surfaces` is the 1:N side
+and simultaneously the evidence source and the surface→entity bridge. `surfaces`
+holds one embedding per distinct string.
+
+**Why.** Every query goes through `chains` in one direction or the other:
+seeding walks surface → chain → entity, passages walk entity → chain → episode.
+One hinge, no denormalised bridge to keep in sync when `entity_id` moves.
+
+**Mentions are not stored.** Without offsets, a mention row's natural key
+collapses to `(chain_id, surface)` — so `chain_surfaces` *is* the mention table,
+with `n_mentions` for the frequency that would otherwise be lost. That count is
+the one thing here that cannot be re-derived later without re-extracting.
+
+**Cost.** Offsets are gone, so highlighting or recomputing a context vector needs
+the episode text and a re-find.
+
+---
+
+
+
+### 28. Entities are thin and disposable — *Accepted*
+
+**Decision.** `entities` holds an id, a canonical name and timestamps. No
+surfaces array, no episode list, no counts, no `merged_into` tombstone. Emptied
+entities are deleted.
+
+**Why.** Everything else is derivable from `chains ⋈ chain_surfaces`, and a
+derived value stored twice is a value that can disagree with itself. The
+tombstone was dropped once it was clear nothing outside the graph holds an
+entity id across syncs: the PPR payload is regenerated on every update, so a
+merge is just chains changing `entity_id`.
+
+**Cost.** A deleted id is unresolvable — there is no way to discover where it
+went. Reinstate `merged_into` the moment anything caches an entity id, saves a
+link, or otherwise outlives one sync.
+
+---
+
+
+
+### 29. Seeding is vector + lexical, and IDF was measured out — *Accepted*
+
+**Decision.** `surfaces.embedding` is `vector(1536)` (text-embedding-3-large,
+truncated) with an HNSW index, plus a `pg_trgm` GIN index on the surface itself.
+No `n_entities`, no `n_episodes`.
+
+**Why both halves.** For short strings, exact match beats cosine outright, and
+`S. Chen` should hit `S. Chen` at rank 1 without depending on an embedding. 1536
+also keeps the vector inside pgvector's indexable dimension limit, which full
+3072 exceeds.
+
+**Why the counts were dropped.** Measured on ECB+ with this pipeline's own
+extraction: IDF over document frequency cost 0.017 MRR and `1/n_entities` cost
+0.097. Both point the wrong way for structural reasons — junk surfaces are
+*rare*, not frequent (75.7% appear in one episode), so IDF up-weights them; and
+junk entities are singletons, so `1/n_entities` hands them the maximum. What
+does work is dividing an entity's score by `sqrt(its surface count)`: MRR 0.689
+→ 0.749, and it needs no stored column at all.
+
+---
+
+
+
 ## Conventions
 
 
@@ -486,17 +649,38 @@ that is when prod becomes precious and migrations start meeting lived-in data.
 
 
 
+## What did not work
+
+Schema-side counterparts to the list in `security.md`. Each was built, measured,
+and removed.
+
+| Attempt | What happened |
+| --- | --- |
+| **`ordinal` on episodes** | A version-dependent integer maintained on every sync, refreshed whenever an insertion moved anything. Nothing ever read it. Removing it cost the ability to recover reading order from the database — accepted knowingly (entry 26). |
+| **`merged_into` tombstones** | Built to make a merged-away entity id resolvable. Then established that nothing outside the graph holds an id across syncs, which makes the pointer a column maintained for a reader that does not exist. Removed with a note on exactly when to bring it back. |
+| **`n_entities` / `n_episodes` on surfaces** | Added as IDF and ambiguity weights before measuring. Both measured negative (entry 29). The lesson is the ordering: they were columns first and hypotheses second. |
+| **Head-offset chain ids** | `uuid5(episode_id \| head.start \| head.end)` keyed identity to *which span the model called canonical* — an opinion that can change between runs while the chain does not. Replaced by `content_key`, which is a property of the chain. |
+| **Storing edges** | A table keyed on entity ids, which churn on every re-cluster. Deriving the same edges from `chains` made merges and splits automatic instead of a migration (entry 24). |
+| **Keeping `slack_teams` beside `connector_installations`** | Two tables that must agree about which workspace belongs to whom. The specific one held nothing the general one lacked. |
+| **The context vector as an identity signal** | Dropped at AUC 0.505 — chance. The reading turned out to be an artifact of episode-centering; uncentered the same signal measures 0.745. It now enters only through a feature gated on same-string pairs, where the name features carry no information at all. A negative result that was really a bug in the measurement. |
+
+---
+
+
+
 ## Open items
 
 
 | Item                                | Note                                                                                                                                                                                                                                                                                                                 |
 | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `facts` table and source bridges    | Enrichment returns facts with attribution; reified facts are what make answers explicable and permission-checkable. Not yet in the schema.                                                                                                                                                                           |
-| `documents`, `node_sources`         | Document↔node is many-to-many and needs a bridge — permission propagation travels along it.                                                                                                                                                                                                                          |
+| `facts` table and source bridges    | Enrichment returns facts with attribution; reified facts are what make answers explicable and permission-checkable. Not yet in the schema. This is also the labelled-edge layer entry 24 defers: co-occurrence tells the walk which entities are near each other, never why.                                        |
+| `documents`, `node_sources`         | Document↔entity is many-to-many; `chains` is the bridge today (entity → chain → episode → file). Whether that is enough for permission propagation is untested.                                                                                                                                                     |
 | `events` table shape                | Dedupe minimum is `(slack_event_id PK, received_at)`. Worth adding `payload jsonb` (replay), `status`/`responded_at` (idempotency at `/work`), `error`. `tenant_id` must be nullable — it is resolved in `/work`, not at ACK time. Needs a retention rule. Consider an `internal` schema so it is never API-exposed. |
-| Composite-FK tenant pinning         | `(id, tenant_id)` unique on parents, children referencing both columns, so cross-tenant references are unrepresentable. Not yet applied.                                                                                                                                                                             |
+| ~~Composite-FK tenant pinning~~     | **Shipped.** `files`, `episodes`, `chains` and `chain_surfaces` all reference `(id, tenant_id)`, so a cross-tenant reference is unrepresentable rather than merely denied.                                                                                                                                          |
 | Bi-temporal columns and constraints | `valid_at`/`invalid_at`/`created_at`/`expired_at` on edges and facts, with a check that validity ordering holds and an exclusion constraint against overlapping intervals per fact.                                                                                                                                  |
 | Blob storage location               | Object storage co-located with compute is faster for a latency-path download; single-vendor is operationally simpler. Measure a 20 MB cross-cloud fetch before committing.                                                                                                                                           |
 | Subscription history                | Currently modelled one-to-one with tenants. One-to-many with a status column preserves trial→paid→churn history.                                                                                                                                                                                                     |
-
-
+| Canonical name for an entity        | `entities.canonical_name` is `NOT NULL`, and nothing computes it — `pick_head` runs *within* a chain, never across a cluster. The first write path has to choose one, and re-clustering will silently overwrite a human correction unless a lock column is added.                                                    |
+| Entity id stability across re-runs  | Ids are minted once and carried forward by chain-membership overlap — but that matching step does not exist yet, and the interim naming (smallest member chain id) renames an entity roughly 1 in *n+1* times when a chain joins it. Fine for full re-runs, wrong for incremental sync.                             |
+| Extraction filter                   | Roughly a quarter of top-1 retrieval seeds land on junk entities (`the freeze`, `the change`) under every weighting scheme tried. No retrieval-side weight fixes it; the WHAT-COUNTS taxonomy in `prompts.py` is written and applied nowhere.                                                                        |
+| Transaction-pooler behaviour        | `SET LOCAL` is correct for it, but only direct sessions have been exercised. Session-vs-transaction pooling is exactly where a tenant leak appears in production and not in dev.                                                                                                                                    |

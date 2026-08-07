@@ -18,6 +18,21 @@ CREATE ROLE app_user NOLOGIN;
 CREATE ROLE app_connector NOLOGIN;
 CREATE ROLE app_ingest NOLOGIN;
 
+-- The ACK path, and deliberately NOT a member of app_user.
+--
+-- It may be the same server today, which makes this look like ceremony. The
+-- boundary it draws is not process, it is exposure: the ACK endpoint is
+-- publicly reachable because Slack posts to it, while the worker endpoint is
+-- (or will be) OIDC-gated. A logic bug or injection in the public handler
+-- running as app_connector could read that workspace's entire corpus; running
+-- as app_ack it can insert an event row and nothing else.
+--
+-- Costs one extra `SET LOCAL ROLE app_ack` on the ACK path. If that ever reads
+-- as friction, collapsing it is a two-line change: point the events policies at
+-- app_user and drop these two roles. The table is the durable decision; the
+-- role is not.
+CREATE ROLE app_ack NOLOGIN;
+
 -- Both inherit the table grants below, so the privilege set stays in one place
 -- and the roles differ only in how a tenant is resolved.
 GRANT app_user TO app_connector;
@@ -26,14 +41,15 @@ GRANT app_user TO app_ingest;
 -- Without this nothing can `SET ROLE` into them -- "permission denied to set
 -- role" and the whole bundle is unusable.
 --
--- postgres carries BYPASSRLS, so the walls do NOT apply until the SET ROLE has
--- happened: the switch is what enforces isolation, not the connection. Any
--- backend path that forgets it runs unwalled. In production give the server its
--- own LOGIN role, granted app_connector or app_ingest and *without* BYPASSRLS,
--- so the floor is a walled role rather than a superuser.
+-- postgres carries BYPASSRLS, so from *that* role the walls do not apply until
+-- SET ROLE has happened -- a path that forgets it runs unwalled. This membership
+-- is for migrations and tests only. The server authenticates as one of the
+-- NOINHERIT login roles in the next migration, where forgetting SET ROLE fails
+-- loudly instead.
 GRANT app_user TO postgres;
 GRANT app_connector TO postgres;
 GRANT app_ingest TO postgres;
+GRANT app_ack TO postgres;
 
 GRANT USAGE ON SCHEMA public TO app_user;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_user;
@@ -70,21 +86,5 @@ GRANT EXECUTE ON FUNCTION public.current_tenant_id() TO app_user;
 -- Only the role that proves a workspace may fetch its credential.
 GRANT EXECUTE ON FUNCTION public.current_token_ref() TO app_connector;
 
--- ── resource ceilings ────────────────────────────────────────────────────────
-
--- A runaway query otherwise pins a pooled connection indefinitely, and an
--- abandoned transaction holds its locks.
---
--- CAVEAT: ALTER ROLE ... SET is applied at *login*, against the role that
--- authenticated. These roles are NOLOGIN and reached by SET ROLE, so these do
--- NOT take effect today -- verified, statement_timeout reads back as 0 inside a
--- SET ROLE session. They start working the moment the server connects as a
--- dedicated LOGIN role granted one of them, which is the production shape
--- anyway. Until then the ceiling must come from the connection string
--- (`options=-c statement_timeout=30s`) or a SET LOCAL beside the SET LOCAL ROLE.
-ALTER ROLE app_user SET statement_timeout = '30s';
-ALTER ROLE app_user SET idle_in_transaction_session_timeout = '10s';
-ALTER ROLE app_connector SET statement_timeout = '30s';
-ALTER ROLE app_connector SET idle_in_transaction_session_timeout = '10s';
-ALTER ROLE app_ingest SET statement_timeout = '30s';
-ALTER ROLE app_ingest SET idle_in_transaction_session_timeout = '10s';
+-- Resource ceilings live with the LOGIN roles, in the next migration:
+-- ALTER ROLE ... SET applies at login, and nothing logs in as these.
