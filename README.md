@@ -34,7 +34,7 @@ uv run python -m src.inject.main --store out/store.json \
 uv run uvicorn src.app:app --port 8000   # GET /health, POST /slack/event
 ```
 
-With a database (`supabase start && supabase db reset` from the repo root), drop `--dry-run` and pass `--dsn`, then ask with `uv run python -m src.query.retrieve ask --tenant <uuid> "who owns the Okta rollout?"`. The tenant-isolation tests in `old_server/tests/` need the database up.
+With a database (`supabase start` from the repo root, then set a password on the login roles the migrations create: `ALTER ROLE app_ingest_login PASSWORD '...'`), drop `--dry-run` and pass `--dsn`, then ask with `uv run python -m src.query.retrieve ask --tenant <uuid> "who owns the Okta rollout?"`. The tenant-isolation tests in `old_server/tests/` need the database up.
 
 Env vars: `OPENAI_API_KEY`, `SLACK_SIGNING_SECRET`, `SLACK_BOT_TOKEN`, `DATABASE_URL`, `CONNECTOR_DATABASE_URL`, optional `GITHUB_TOKEN` for repo sync and `VERIFY_TIMESTAMP=false` for replaying through ngrok.
 
