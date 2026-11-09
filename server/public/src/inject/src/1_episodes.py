@@ -266,6 +266,8 @@ def load_store(path: Path) -> dict:
 
 
 def save_store(path: Path, store: dict) -> None:
+    """Write the store, creating the parent directory on first save."""
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(store, ensure_ascii=False, indent=1))
 
 
