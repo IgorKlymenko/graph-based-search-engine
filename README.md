@@ -70,13 +70,6 @@ Deciding what an edge is. The first design stored edges and precomputed a CSR gr
 
 Python 3.13, FastAPI, Postgres on Supabase (pgvector, pg_trgm, row-level security), psycopg, spaCy, nomic-embed-text-v1.5 via transformers/torch, hnswlib, scikit-learn, OpenAI (gpt-4.1-mini, gpt-4.1, text-embedding-3-large), Slack Events API, uv, pytest, ruff.
 
-## Status
-
-- Not deployed. Event dedupe is in-memory and the worker is FastAPI BackgroundTasks; the Postgres events table and Cloud Tasks worker are designed and the schema exists, the app isn't wired to them.
-- No Slack OAuth install flow yet; the dev app is installed by hand from `slack/manifest.dev.yaml`.
-- Slack history backfill isn't packaged; documents reach the graph through `src.inject` and the GitHub connector. Notion and Drive are planned.
-- `SET LOCAL` under Supabase's transaction pooler hasn't been verified.
-
 ## License
 
 MIT
