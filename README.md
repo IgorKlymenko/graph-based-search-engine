@@ -72,4 +72,4 @@ Python 3.13, FastAPI, Postgres on Supabase (pgvector, pg_trgm, row-level securit
 
 ## License
 
-MIT
+[PolyForm Noncommercial 1.0.0](LICENSE): free for non-commercial use. Commercial use: contact me.
