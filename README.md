@@ -11,10 +11,6 @@ A search engine over a team's Slack channels and repos: mentions are linked into
 
 *One indexed corpus as a graph: 950 nodes, 3,044 relationships. Entities are clustered into communities with their text units attached.*
 
-<img src="docs/neo4j-communities.png" width="620" alt="Community hierarchy">
-
-*Community hierarchy: hubs are communities, leaves are the entities in them.*
-
 ## Why I built this
 
 Teams keep what they know in Slack threads and repos, and keyword search doesn't know that "S. Chen", "Sarah" and "Dr. Sarah Chen" are one person. I wanted to find out how much an entity graph adds over plain dense retrieval, whether the same search cuts the tokens an agent burns grepping through a codebase, and to build the multi-tenant plumbing properly rather than as a demo. This was an independent research project.
