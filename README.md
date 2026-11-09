@@ -40,7 +40,7 @@ Env vars: `OPENAI_API_KEY`, `SLACK_SIGNING_SECRET`, `SLACK_BOT_TOKEN`, `DATABASE
 
 ## How it works
 
-![Query path](docs/query-flow.png)
+![Query path](docs/query-path.png)
 
 **Ingest** (`server/public/src/inject/`): a document is split into ~1000-character episodes. spaCy builds a span inventory, and gpt-4.1-mini groups the spans into coreference chains, answering with span ids only so it can't invent text. Chains are embedded with nomic-embed-text-v1.5 and every candidate pair is scored on name cosine, string similarity, alias evidence and co-occurrence. Only the uncertain band goes to an LLM reviewer. Union-find clusters chains into entities, and everything lands in Postgres in one transaction.
 
