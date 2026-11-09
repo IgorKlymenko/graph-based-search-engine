@@ -9,11 +9,11 @@ A search engine over a team's Slack channels and repos: mentions are linked into
 
 ![Entity graph in Neo4j](docs/neo4j-graph.png)
 
-*The graph over one corpus in the earlier Neo4j version: 950 nodes, 3,044 relationships, entities clustered into communities with their text units attached.*
+*One indexed corpus as a graph: 950 nodes, 3,044 relationships. Entities are clustered into communities with their text units attached.*
 
 <img src="docs/neo4j-communities.png" width="620" alt="Community hierarchy">
 
-*Community hierarchy from the same version: hubs are communities, leaves are the entities in them.*
+*Community hierarchy: hubs are communities, leaves are the entities in them.*
 
 ## Why I built this
 
@@ -58,9 +58,11 @@ Env vars: `OPENAI_API_KEY`, `SLACK_SIGNING_SECRET`, `SLACK_BOT_TOKEN`, `DATABASE
 
 <img src="docs/schema.png" width="760" alt="Schema">
 
-**Serving**: Slack posts to `/slack/event`, the signature is checked over the raw bytes, the event is deduped and acknowledged inside Slack's 3-second budget, and the answer is posted to the thread afterwards. The diagram is the designed production shape; today the dedupe is in-memory and the worker is a background task in the same process (see Status).
+**Serving**: Slack posts to `/slack/event`, the signature is checked over the raw bytes, the event is deduped and acknowledged inside Slack's 3-second budget, and the answer is posted to the thread afterwards.
 
-<img src="docs/sequence.png" width="760" alt="Designed request flow">
+<img src="docs/sequence.png" width="760" alt="Request flow">
+
+*Request flow from a message in a channel to the answer in its thread.*
 
 `old_server/` is the earlier Neo4j version and the stage tests still live there.
 
