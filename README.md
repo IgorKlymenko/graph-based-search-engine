@@ -7,9 +7,13 @@ A search engine over a team's Slack channels and repos: mentions are linked into
      about something in the indexed notes, show the holding reply, then the threaded answer
      with its citations. Export at 800 px wide, ~12 fps, under 3 MB, save as docs/demo.gif. -->
 
-![One entity after linking](docs/entity-graph.png)
+![Entity graph in Neo4j](docs/neo4j-graph.png)
 
-*One entity after linking: "Sarah", "S. Chen", "Sarah Chen" and "Dr. Sarah Chen" from different documents resolved to one node. Rendered straight from the database by the internal graph viewer.*
+*The graph over one corpus in the earlier Neo4j version: 950 nodes, 3,044 relationships, entities clustered into communities with their text units attached.*
+
+<img src="docs/neo4j-communities.png" width="620" alt="Community hierarchy">
+
+*Community hierarchy from the same version: hubs are communities, leaves are the entities in them.*
 
 ## Why I built this
 
@@ -44,11 +48,19 @@ Env vars: `OPENAI_API_KEY`, `SLACK_SIGNING_SECRET`, `SLACK_BOT_TOKEN`, `DATABASE
 
 **Ingest** (`server/public/src/inject/`): a document is split into ~1000-character episodes. spaCy builds a span inventory, and gpt-4.1-mini groups the spans into coreference chains, answering with span ids only so it can't invent text. Chains are embedded with nomic-embed-text-v1.5 and every candidate pair is scored on name cosine, string similarity, alias evidence and co-occurrence. Only the uncertain band goes to an LLM reviewer. Union-find clusters chains into entities, and everything lands in Postgres in one transaction.
 
+<img src="docs/entity-graph.png" width="760" alt="One entity after linking">
+
+*One entity after linking: "Sarah", "S. Chen", "Sarah Chen" and "Dr. Sarah Chen" from different documents resolved to one node, rendered straight from the Postgres rows.*
+
 **Query** (`server/public/src/query/retrieve.py`): the question is embedded and matched to name surfaces (HNSW plus exact match), which seed entities. Personalized PageRank runs over co-occurrence edges derived at query time and weighted by PMI, the ranked entities' passages are fused with BM25, and gpt-4.1 answers, reframes a question whose premise the notes contradict, or asks which entity you meant. `search_passages()` returns the same ranked passages as plain text for an agent's search tool; `scripts/eval_agent_loop.py` measures a tool-using agent with and without it.
 
 **Isolation** is the database's job: row-level security keyed on a per-transaction `SET LOCAL` context. The connector role can't claim a tenant; the database resolves it from the installation row. Schema in `supabase/migrations/`, reasoning in `ADRs/`, map in `wiki/`.
 
 <img src="docs/schema.png" width="760" alt="Schema">
+
+**Serving**: Slack posts to `/slack/event`, the signature is checked over the raw bytes, the event is deduped and acknowledged inside Slack's 3-second budget, and the answer is posted to the thread afterwards. The diagram is the designed production shape; today the dedupe is in-memory and the worker is a background task in the same process (see Status).
+
+<img src="docs/sequence.png" width="760" alt="Designed request flow">
 
 `old_server/` is the earlier Neo4j version and the stage tests still live there.
 
