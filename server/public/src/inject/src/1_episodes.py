@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -43,10 +44,13 @@ _UUID_NS = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
 # the corpus with no record of why. Bump the entry for the connector you changed
 # — per-source, so a Slack rendering change does not invalidate fs or HubSpot.
 RENDER_VERSIONS: dict[str, int] = {
-    "upload": 1,    # read the file as text; near-identity
+    "upload": 2,    # strip_markup on the text; 2 = code fences removed too
     "slack": 1,     # thread -> text: which of author/ts/reactions/joins appear
     "gdrive": 1,
     "notion": 1,
+    "github": 3,    # code: a paragraph per symbol (connectors/code); .md: strip_markup
+                    # 2 = ambiguous names never a bare mention; no __init__.py mention
+                    # 3 = unresolvable in-repo re-exports do not make a name ambiguous
 }
 DEFAULT_RENDER_VERSION = 1
 
@@ -75,6 +79,11 @@ def rel_path(path: Path, root: Path) -> str:
     return path.resolve().relative_to(root.resolve()).as_posix()
 
 
+def episode_id_for(file_id: str, text: str) -> str:
+    """Identity of one episode: its document and its exact text, nothing else."""
+    return stable_uuid(f"episode:{file_id}|{sha1_text(text)}")
+
+
 def file_id_for(tenant_id: str, source: str, external_id: str) -> str:
     """Identity of one source document, scoped to its tenant and system.
 
@@ -84,6 +93,58 @@ def file_id_for(tenant_id: str, source: str, external_id: str) -> str:
     it is stable across renames, which a path is not.
     """
     return stable_uuid(f"file:{tenant_id}|{source}|{external_id}")
+
+
+# Ordered: fences and embeds before links before emphasis, so `![[x]]` is gone
+# before the `[[x]]` rule can turn it into a stray `!`.
+_MARKUP: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"^[ \t]*```[^\n]*\n?", re.MULTILINE), ""),         # fence lines; code stays
+    (re.compile(r"%%.*?%%", re.DOTALL), ""),                     # Obsidian comments
+    (re.compile(r"!\[\[[^\]]*\]\]"), ""),                   # embeds, images
+    (re.compile(r"!\[[^\]]*\]\([^)]*\)"), ""),              # markdown images
+    (re.compile(r"\[\[[^\]|]*\|([^\]]*)\]\]"), r"\1"),      # [[target|alias]]
+    (re.compile(r"\[\[([^\]]*)\]\]"), r"\1"),               # [[target]]
+    (re.compile(r"\[([^\]]*)\]\([^)]*\)"), r"\1"),          # [text](url)
+    (re.compile(r"={2,}([^=\n]+)={2,}"), r"\1"),            # ==highlight==, ===typo===
+    (re.compile(r"~~([^~\n]+)~~"), r"\1"),                  # ~~strike~~
+    (re.compile(r"`([^`\n]+)`"), r"\1"),                    # `code`
+    (re.compile(r"\*\*([^*\n]+)\*\*"), r"\1"),              # **bold**
+    (re.compile(r"(?<!\w)\*([^*\n]+)\*(?!\w)"), r"\1"),     # *italic*
+    (re.compile(r"(?<!\w)__([^_\n]+)__(?!\w)"), r"\1"),      # __bold__
+    (re.compile(r"(?<!\w)_([^_\n]+)_(?!\w)"), r"\1"),        # _italic_
+    (re.compile(r"^#{1,6}[ \t]+", re.MULTILINE), ""),               # heading markers
+    (re.compile(r"^[ \t]*>[ \t]?", re.MULTILINE), ""),              # blockquote markers
+    (re.compile(r"^[ \t]*\^[\w-]+[ \t]*$\n?", re.MULTILINE), ""),   # block ids
+    (re.compile(r"<-{2,}"), "--"),                          # the author's arrows
+)
+
+
+def strip_markup(doc: str) -> str:
+    """Remove Obsidian and Markdown syntax, keeping the words it decorated.
+
+    The extractor reads this text literally, so ``==best at seed==`` yields the
+    surface ``seed==`` -- which then becomes a row in ``surfaces`` and half of a
+    primary key. Measured on a 154-note vault: 213 of 5,753 identifying surfaces
+    carried markup on the raw path, 9 after stripping, and those nine were all
+    code-fence fragments -- hence the fence rule. This is preprocessing rather
+    than filtering: it deletes characters nobody would ever phrase a question
+    about, so unlike an entity filter it costs no recall.
+
+    Runs before the document is hashed or split, so the stored episode text is
+    exactly what the extractor saw. Cleaning later would break the prompt's
+    verbatim rule -- every context must be findable by exact string search in
+    its episode.
+
+    Wiki link *targets* survive as plain text: ``[[Potential Markets]]`` is a
+    deliberate reference to a real topic, and dropping it would lose one of the
+    few genuine cross-document signals a vault gives you. List markers,
+    indentation and the lines inside a code fence survive too -- one item per
+    line is what stops an enumerated block from arriving as a single run-on
+    sentence.
+    """
+    for pattern, replacement in _MARKUP:
+        doc = pattern.sub(replacement, doc)
+    return doc
 
 
 # ── splitting ─────────────────────────────────────────────────────────────────
@@ -158,7 +219,7 @@ def build_records(file_id: str, doc: str, max_chars: int = 1000) -> list[dict]:
     seen: set[str] = set()
     records: list[dict] = []
     for ep in split_episodes(doc, max_chars):
-        episode_id = stable_uuid(f"episode:{file_id}|{sha1_text(ep.text)}")
+        episode_id = episode_id_for(file_id, ep.text)
         if episode_id in seen:
             continue
         seen.add(episode_id)
@@ -216,6 +277,8 @@ def sync_file(
     source: str,
     external_id: str,
     max_chars: int = 1000,
+    title: str | None = None,
+    url: str | None = None,
 ) -> FileDiff:
     """Reconcile one source document's episodes into ``store``; return the diff.
 
@@ -229,6 +292,9 @@ def sync_file(
 
     Removed episodes are kept with a ``removed_at`` stamp rather than deleted,
     so whatever consumes this store can retire their downstream products.
+
+    ``title`` and ``url`` are for citations (``files.title``, ``files.url``);
+    they never take part in identity or in the change check.
     """
     fid = file_id_for(tenant_id, source, external_id)
     digest = sha1_text(doc)
@@ -239,6 +305,7 @@ def sync_file(
         and known.get("full_text_hash") == digest
         and known.get("render_version") == render_version_for(source)
     ):
+        known["title"], known["url"] = title, url
         return FileDiff(
             fid, source, external_id, "unchanged",
             list(known["episode_ids"]), [], [],
@@ -273,6 +340,8 @@ def sync_file(
         "tenant_id": tenant_id,
         "source": source,
         "external_id": external_id,
+        "title": title,
+        "url": url,
         "full_text_hash": digest,
         "render_version": render_version_for(source),
         "episode_ids": new_ids,
@@ -291,6 +360,26 @@ def sync_file(
 
 
 UPLOAD_SOURCE = "upload"
+
+
+def retire_file(store: dict, file_id: str) -> list[str]:
+    """Mark a document and its live episodes removed; return the episode ids.
+
+    Nothing is deleted: the stamps let the upload retire the rows downstream,
+    and an episode that comes back identical is simply un-retired by
+    ``sync_file``. A file already retired, or unknown, is a no-op.
+    """
+    meta = store["files"].get(file_id)
+    if meta is None or meta.get("removed_at"):
+        return []
+    now = datetime.now(UTC).isoformat()
+    meta["removed_at"] = now
+    gone = list(meta["episode_ids"])
+    for eid in gone:
+        episode = store["episodes"].get(eid)
+        if episode is not None:
+            episode["removed_at"] = now
+    return gone
 
 
 def sync_corpus(
@@ -312,7 +401,7 @@ def sync_corpus(
     seen_files: set[str] = set()
     for path in sorted(notes_dir.rglob("*.md")):
         try:
-            doc = path.read_text(encoding="utf-8", errors="ignore")
+            doc = strip_markup(path.read_text(encoding="utf-8", errors="ignore"))
         except OSError:
             continue
         if not doc.strip():
@@ -324,18 +413,12 @@ def sync_corpus(
             external_id=external_id, max_chars=max_chars,
         ))
 
-    now = datetime.now(UTC).isoformat()
-    for fid, meta in store["files"].items():
+    for fid, meta in list(store["files"].items()):
         if meta.get("tenant_id") != tenant_id or meta.get("source") != source:
             continue  # another tenant or connector owns this document
         if fid in seen_files or meta.get("removed_at"):
             continue
-        meta["removed_at"] = now
-        gone = list(meta["episode_ids"])
-        for eid in gone:
-            episode = store["episodes"].get(eid)
-            if episode is not None:
-                episode["removed_at"] = now
+        gone = retire_file(store, fid)
         diffs.append(FileDiff(
             fid, meta["source"], meta["external_id"], "updated", [], [], gone,
         ))

@@ -29,5 +29,15 @@ relation_vectors.npz
 demo_Tess/workvivo_corpus/
 demo_Tess/workvivo_corpus_demo/
 
-# OS
+# OS / editor
 .DS_Store
+.claude/settings.local.json
+
+# Local run state
+.slack_tenant
+out/
+
+# experiment caches and results (server/public/scripts); questions files stay tracked
+server/public/scripts/*.cache.json
+server/public/scripts/*.results.json
+server/public/scripts/*.vectors.npz

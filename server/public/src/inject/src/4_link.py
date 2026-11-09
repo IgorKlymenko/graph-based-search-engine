@@ -59,6 +59,17 @@ PRIOR_WEIGHTS: dict[str, float] = {
 }
 PRIOR_INTERCEPT = -3.5  # absorbs the constant that type_agreement used to add
 
+# Below this many chains per neighbour, blocking is exhaustive instead of ANN.
+# With k neighbours each, ANN yields ~n*k/2 pairs against n*n/2 exhaustive, so
+# the saving is k/n -- nothing until n greatly exceeds k. At 55 chains and k=50
+# it cut 1485 pairs to 1364 (8%) while asking a 55-item index for 51 neighbours,
+# which is the regime where an approximate index is least reliable: the last two
+# neighbours of 16 rows differed between runs on identical input, *with* a fixed
+# seed. Those pairs then score, possibly merge, and reshuffle entity ids for no
+# reason anything upstream can see. Exhaustive is exact and deterministic; ANN
+# is an optimisation and should only run where it is actually optimising.
+ANN_MIN_FACTOR = 5
+
 
 class ChainRecord(NamedTuple):
     """One chain, as level 1 and level 2 leave it."""
@@ -70,6 +81,28 @@ class ChainRecord(NamedTuple):
     candidate_type: str
     name_vector: np.ndarray | None = None
     context_vector: np.ndarray | None = None
+    key: str | None = None  # what a connector says this chain is (a qualified name)
+
+
+def keys_settle(a: ChainRecord, b: ChainRecord) -> bool:
+    """Is this pair decided by connector keys, so the reviewer is never asked?
+
+    A seeded chain carries the qualified name its connector resolved. Two
+    chains with different keys are two things, and a chain with a key beside
+    one with none is a symbol beside prose. Both were sent to the reviewer
+    before this rule existed and it merged them: measured on the author's
+    vault plus this repository, 903 review merges joined distinct symbols
+    (``PairScorer`` with ``PairScorer.fit`` and ``PairScorer.__init__``) and
+    288 joined a symbol to a prose chain ("Entity Linking" with
+    ``entity_linking.4_link.Evidence``), gluing 853 chains into one entity.
+    The reviewer decides what the passages leave uncertain; a key is not
+    uncertain. A pair the scorer merges on its own still merges -- an alias
+    such as ``episodes.empty_store`` for ``1_episodes.empty_store`` is real
+    evidence that no key contradicts.
+    """
+    if a.key is None and b.key is None:
+        return False
+    return a.key != b.key
 
 
 class Evidence(NamedTuple):
@@ -265,7 +298,12 @@ def ann_candidate_pairs(
         return []
     matrix = np.vstack([c.name_vector for c in usable]).astype("float32")
     index = hnswlib.Index(space="cosine", dim=matrix.shape[1])
-    index.init_index(max_elements=len(usable), ef_construction=ef, M=16)
+    # Seeded: HNSW construction is randomised, and an unseeded index returned
+    # a different neighbour set on identical input -- measured, 2 pairs of
+    # 1364 differed between runs. Those pairs then score, possibly merge, and
+    # reshuffle entity ids for no reason anything upstream can see.
+    index.init_index(max_elements=len(usable), ef_construction=ef, M=16,
+                     random_seed=100)
     index.add_items(matrix, np.arange(len(usable)))
     index.set_ef(max(ef, k + 1))
 
@@ -497,16 +535,23 @@ def unresolved(
 
     out: dict[str, list[int]] = {}
     for cluster, members in by_cluster.items():
-        if len(members) != 1:
-            continue  # merged with something: evidence settled it
-        chain = members[0]
-        if not chain.surfaces <= evidence.ambiguous_surfaces:
-            continue  # has a name that identifies on its own
+        # Every member contested, not just a lone one. Two bare "S. Chen"
+        # chains merge with each other -- identical heads, so the context gate
+        # opens and the reviewer sees two plausible passages -- and the pair
+        # then looked "settled by evidence" purely because the cluster had grown
+        # to two. Measured on a ten-document corpus: it produced a third
+        # S. Chen entity beside Sarah's and Steven's, and nothing was routed to
+        # the graph resolver at all. Merging with something equally unanchored
+        # is not evidence.
+        if not all(m.surfaces <= evidence.ambiguous_surfaces for m in members):
+            continue  # somebody here has a name that identifies on its own
+        contested = {s for m in members for s in m.surfaces}
         candidates = sorted(
-            {c for surface in chain.surfaces for c in holders[surface]} - {cluster}
+            {c for surface in contested for c in holders[surface]} - {cluster}
         )
         if candidates:
-            out[chain.chain_id] = candidates
+            for member in members:
+                out[member.chain_id] = candidates
     return out
 
 

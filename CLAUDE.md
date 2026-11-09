@@ -2,6 +2,11 @@
 
 This document contains critical information about working with this codebase. Follow these guidelines precisely.
 
+Model-facing documentation lives in `wiki/`. Start at `wiki/README.md` and use
+its routing table to pick the one or two pages a task needs before opening
+code. Known issues and proposals are in `wiki/PROPOSALS.md`; keep that file
+updated when you find something while working.
+
 ## Core Development Rules
 
 1. Package Management
@@ -75,19 +80,35 @@ This document contains critical information about working with this codebase. Fo
 
 ## System Architecture
 
-[fill in here]
+Slack-native team knowledge base. Slack posts to `server/public/src/app.py`
+(verify HMAC on raw bytes → dedupe → enqueue → ACK in 3 s). A worker renders
+threads to text and calls `src.inject.main.ingest()`: documents → episodes →
+coreference chains (LLM) → chain vectors → linked entities (LLM on the
+uncertain band) → Postgres, in one transaction. Questions are answered by
+surfaces → chains → entities → Personalized PageRank over PMI-weighted
+co-occurrence → passages → LLM. Tenant isolation is enforced by row-level
+security keyed on a per-transaction context. Full map: `wiki/architecture.md`.
 
 ## Core Components
 
-- `config.py`: Configuration management
-- `daemon.py`: Main daemon
-[etc... fill in here]
+- `server/public/src/app.py`: Slack events ingress; `src/security/slack.py`: HMAC signer
+- `server/public/src/inject/main.py`: `ingest()` — documents in, graph rows out
+- `server/public/src/inject/src/1_episodes.py … 5_store.py`: the stages, imported via
+  the aliases `episodes`, `chains`, `encoding`, `pairing`, `store` (digit-prefixed
+  files cannot be imported directly; see `wiki/conventions.md`)
+- `server/public/src/inject/utils/{spans,prompts,judge}.py`: span inventory; tuned prompts (never rewrap); the name judge
+- `server/public/src/query/{retrieve,answer}.py`: the query path — seeds, PPR, cutoff, passages; stance (answer / reframe / clarify) and Slack rendering
+- `server/public/src/connectors/`: `base.py` (the `Connector` contract and `sync()`, the only door from a source into the store), `code/` (symbol model, parser registry, Python parser, renderer), `github/` (client + connector); design in `ADRs/connectors/github.md`
+- `supabase/migrations/`: the only write path to schema; `ADRs/`: why
+- `old_server/entity_linking/slack.py`: Slack history connector (CLI, not yet packaged); `ask.py` there is superseded by `src/query`
+- `old_server/tests/`: stage tests and the tenant-isolation suite
+- `old_server/{pipeline,retrieval,mcp-server}`: legacy Neo4j code — see `wiki/legacy.md`
 
 ## Database access — non-negotiable rules for any client
 
 The database enforces tenant isolation, but only if the client sets up each
 request correctly. These are the parts the schema cannot enforce for you.
-Isolation is verified by `old_server/tests/test_db_tenant_isolation.py` (36
+Isolation is verified by `old_server/tests/test_db_tenant_isolation.py` (39
 tests); reasoning is in `ADRs/supabase/security.md`.
 
 ### Every request is one transaction, in this shape

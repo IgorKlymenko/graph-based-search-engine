@@ -262,8 +262,8 @@ def mark_text(text: str, spans: list[Span]) -> str:
     for span in spans:
         opens.setdefault(span.start, []).append(span)
         closes[span.end] = closes.get(span.end, 0) + 1
-    for at in opens:  # longer spans open first so nesting is well formed
-        opens[at].sort(key=lambda s: (-s.end, s.sid))
+    for group in opens.values():  # longer spans open first so nesting is well formed
+        group.sort(key=lambda s: (-s.end, s.sid))
 
     out: list[str] = []
     for i, char in enumerate(text):

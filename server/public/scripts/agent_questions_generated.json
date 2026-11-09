@@ -1,0 +1,665 @@
+{
+ "_doc": "Model-written questions from sampled passages; see make_agent_questions.py. gold is empty on purpose: graded by answer only.",
+ "questions": [
+  {
+   "id": "G1",
+   "category": "code",
+   "question": "How does the eval_agent_tokens.py script evaluate whether the agent's context is sufficient for answering questions, and what does the --grade flag do?",
+   "gold": [],
+   "gold_answer": "The script checks if every gold string is present in the context built by each strategy, which means the agent could answer without another round trip (sufficient). With --grade, a small model answers from each context and a stronger one grades the answer against gold_answer, which is the honest measure when a passage paraphrases the file.",
+   "gold_files": [
+    "server/public/scripts/eval_agent_tokens.py"
+   ],
+   "episode": "138f7a06-7674-5ff0-96f2-17cdead75b2f"
+  },
+  {
+   "id": "G2",
+   "category": "code",
+   "question": "How does the judge decide if an identifier is something an author would look up, and what happens with common nouns in docstrings?",
+   "gold": [],
+   "gold_answer": "The judge reads prose contexts and determines if an author would look something up by that string, rejecting about seven in ten identifiers based on the author's vault. For bare lower-case words like 'work' or 'run' in docstrings, it treats them as common nouns and relies on the qualified name in the chain for identification.",
+   "gold_files": [
+    "server/public/src/connectors/base.py"
+   ],
+   "episode": "5998b067-7025-5507-a8f2-df362cde9b96"
+  },
+  {
+   "id": "G3",
+   "category": "code",
+   "question": "How does our GitHub client handle paginated API responses when fetching data?",
+   "gold": [],
+   "gold_answer": "It follows the 'Link: <\u2026>; rel=\"next\"' header until it is gone, using the paged method which repeatedly calls get.",
+   "gold_files": [
+    "server/public/src/connectors/github/client.py"
+   ],
+   "episode": "8c1348f2-6626-5197-a1a4-e7d946be6dc6"
+  },
+  {
+   "id": "G4",
+   "category": "code",
+   "question": "How does the sync process handle documents and deletions from connectors, and why don't connectors write directly to the store?",
+   "gold": [],
+   "gold_answer": "The sync function processes every document from a connector through episodes.sync_file and retires every removed id through episodes.retire_file, with connectors never touching the store directly. This design ensures that the rules for efficient and correct syncing\u2014like file identity and content-addressed episodes\u2014are enforced in one place, avoiding duplication and errors that could arise if each connector wrote to the store independently.",
+   "gold_files": [
+    "ADRs/connectors/github.md"
+   ],
+   "episode": "46de8db9-842a-5f66-bdc9-1e32ca6b7c71"
+  },
+  {
+   "id": "G5",
+   "category": "code",
+   "question": "How does the rendering style handle ambiguous method names in the knowledge graph, and what are the tradeoffs of using Class.method versus the default?",
+   "gold": [],
+   "gold_answer": "By default, ambiguous method names (those with more than one qualified referent across the repo) are rendered qualified wherever referenced, and on their own definition the bare name appears as plain text beside the qualified mention. Using Class.method removes the bare method name as a surface for every method, which can reduce false merges but may make it harder to match how people refer to methods in Slack messages; it's not the default and should be enabled per repo when method collisions are a significant issue.",
+   "gold_files": [
+    "ADRs/connectors/github.md"
+   ],
+   "episode": "db37b348-773d-5b09-ae19-e65ed9301d0d"
+  },
+  {
+   "id": "G6",
+   "category": "code",
+   "question": "How are we currently handling short-name collisions in docstrings across a GitHub repo, and what's still unresolved?",
+   "gold": [],
+   "gold_answer": "Short-name collisions are closed by entry 11, but what's still open is that a bare colliding name in a docstring now results in a model chain with no seed to join, and whether the reviewer merges it with the correct definition is not measured.",
+   "gold_files": [
+    "ADRs/connectors/github.md"
+   ],
+   "episode": "44534137-6147-5eed-a480-0c6437517837"
+  },
+  {
+   "id": "G7",
+   "category": "code",
+   "question": "How does this module determine if two coreference chains from different episodes refer to the same entity, given that cosine similarity isn't enough?",
+   "gold": [],
+   "gold_answer": "The module uses features based on decisions an LLM already made while reading an episode, rather than relying solely on similarity measures like cosine, which can't reliably separate entities described in similar language or contexts.",
+   "gold_files": [
+    "server/public/src/inject/src/4_link.py"
+   ],
+   "episode": "e48ccf49-d56b-5971-b9cb-64e202aa1d10"
+  },
+  {
+   "id": "G8",
+   "category": "code",
+   "question": "How does the GitHub connector determine what needs to be synced, and what factors affect the cost of a sync?",
+   "gold": [],
+   "gold_answer": "Trees and blobs are content-addressed on GitHub's side, so the diff is a dictionary comparison and the cost of a sync is proportional to what changed, not to the repo. A truncated tree (past 100,000 entries or 7 MB) would read as mass deletion, which the client refuses, and syncing by subtree is not implemented.",
+   "gold_files": [
+    "ADRs/connectors/github.md"
+   ],
+   "episode": "ec8e172f-093a-50b6-8e05-a12a7b8f7514"
+  },
+  {
+   "id": "G9",
+   "category": "code",
+   "question": "How does the code handle counting mentions for each chain and surface combination, and why is this done in Python instead of in the database?",
+   "gold": [],
+   "gold_answer": "The code collapses per-occurrence candidates into one row per (chain, distinct surface), including the mention count and head flag, within Python. This is done here rather than in the database because the number of mentions cannot be re-derived later without offsets or per-mention rows, so recovering it would require re-extracting the episode.",
+   "gold_files": [
+    "server/public/src/inject/src/5_store.py"
+   ],
+   "episode": "de217e7b-54ed-52ce-b1cf-75f52b690072"
+  },
+  {
+   "id": "G10",
+   "category": "code",
+   "question": "How does the model decide whether to answer, reframe, or clarify a user's question based on the provided passages?",
+   "gold": [],
+   "gold_answer": "The model first chooses a stance: it can answer the question directly if the passages support it, reframe the question if the passages suggest a better one (and must name those passages), or ask for clarification if a name in the question is ambiguous. Passages that simply lack the answer are not grounds for a reframe; in that case, it should indicate that the notes do not provide the answer.",
+   "gold_files": [
+    "server/public/src/query/answer.py"
+   ],
+   "episode": "bcd9cb9c-931a-55c8-ac22-8b6a5474b51f"
+  },
+  {
+   "id": "G11",
+   "category": "code",
+   "question": "How should we handle bot answers in terms of indexing\u2014do we risk self-citation if we include them?",
+   "gold": [],
+   "gold_answer": "The passage raises the question of whether bot answers should get indexed, noting the potential risk of self-citation if they are included.",
+   "gold_files": [
+    "ADRs/brainstorming.md"
+   ],
+   "episode": "1dcf6059-d774-5c04-b587-77b78ddd7006"
+  },
+  {
+   "id": "G12",
+   "category": "code",
+   "question": "How does the system decide when to merge or not merge pairs with different connector keys, and what's the reasoning behind this?",
+   "gold": [],
+   "gold_answer": "A pair is not sent to the reviewer or merged on an abandoned review if their connector keys differ or only one side has a key, but the prior scorer can still merge such pairs if it determines they are aliases. This is because the reviewer is meant to resolve uncertainties, but qualified names resolved by a parser are not uncertain, and sometimes real aliases exist across different keys that only the scorer can recognize.",
+   "gold_files": [
+    "ADRs/connectors/github.md"
+   ],
+   "episode": "2bc53c34-741c-588a-a8ec-206edbee8ef2"
+  },
+  {
+   "id": "G13",
+   "category": "code",
+   "question": "How are we handling personalized PageRank computations now that we're using Supabase, and why did we choose the CSR format for the adjacency snapshot?",
+   "gold": [],
+   "gold_answer": "Approximate seeded PPR (push-based) is now run in the application over a CSR adjacency snapshot, which consists of three flat arrays and a UUID\u2194int mapping. CSR was chosen because it makes 'neighbours of node i' a contiguous, cache-friendly slice, and it rebuilds in RAM the index-free adjacency lost at the storage layer; it's also directly compatible with scipy.sparse.",
+   "gold_files": [
+    "ADRs/supabase/tables.md"
+   ],
+   "episode": "1e929ebe-8ffb-58a7-b77c-460f1a22f816"
+  },
+  {
+   "id": "G14",
+   "category": "code",
+   "question": "How does uninstalling an app affect access in our Supabase security model?",
+   "gold": [],
+   "gold_answer": "Removing the app stops access at the same moment, not merely stopping new events, because uninstalled_at IS NULL in both resolvers.",
+   "gold_files": [
+    "ADRs/supabase/security.md"
+   ],
+   "episode": "7c6525db-17fe-5033-b56f-3454d893d31f"
+  },
+  {
+   "id": "G15",
+   "category": "code",
+   "question": "How common are short name collisions in codebases, and how does our evaluation script handle them when building knowledge chains?",
+   "gold": [],
+   "gold_answer": "Short names collide frequently in real code, with 8\u201325% of a repo's short names denoting more than one qualified thing, and 6\u201322% of rendered in-repo references naming one of them. The evaluation script renders the repo, builds seed-only chains, encodes heads, runs the linker's blocking and scoring, and uses the qualified name as ground truth to detect false merges and missed splits.",
+   "gold_files": [
+    "ADRs/connectors/github.md"
+   ],
+   "episode": "1a3d074b-9941-5852-a3bc-0017ad170e4e"
+  },
+  {
+   "id": "G16",
+   "category": "code",
+   "question": "What does the function that returns a mapping from chain IDs to clusters and answers actually provide, and how does it handle unresolved mentions?",
+   "gold": [],
+   "gold_answer": "It returns a mapping from chain IDs to a dictionary with a 'cluster' (which can be an int or None) and an 'answer' containing the raw reasoning. If the cluster is null, it means the mention was declined and remains unresolved, so the mention stays unplaced rather than asserting false facts about an entity.",
+   "gold_files": [
+    "server/public/src/inject/main.py"
+   ],
+   "episode": "4fdccec4-5e07-5ab2-99e2-e7ff276b092e"
+  },
+  {
+   "id": "G17",
+   "category": "code",
+   "question": "How does Nazar handle entities that come from different sources like Postgres, Slack, or Notion when building the knowledge graph?",
+   "gold": [],
+   "gold_answer": "Cross-source entities are treated at the concept level, and a symbol only enters the vault through an exact surface such as entity linking or chains; the vault itself does not store function names, and the number of such entities is determined by actual concepts, not by tuning a limit.",
+   "gold_files": [
+    "ADRs/connectors/github.md"
+   ],
+   "episode": "314ade20-6778-5db2-af4f-3f8b0b1bcb90"
+  },
+  {
+   "id": "G18",
+   "category": "code",
+   "question": "Where should we set resource ceilings like statement timeouts for Supabase roles, and do these settings get inherited through role membership?",
+   "gold": [],
+   "gold_answer": "Resource ceilings such as statement_timeout and idle_in_transaction_session_timeout should be set on the roles that actually log in, since per-role settings are not inherited through membership. These settings are applied at login via ALTER ROLE ... SET, and using SET ROLE afterwards does not reset them.",
+   "gold_files": [
+    "ADRs/supabase/security.md"
+   ],
+   "episode": "88975837-b3d4-5271-b6aa-0beb6bacebd6"
+  },
+  {
+   "id": "G19",
+   "category": "code",
+   "question": "How does the code connector decide which files to parse and what happens with files it can't handle?",
+   "gold": [],
+   "gold_answer": "Python files are parsed using the standard library, Markdown and text files are processed with episodes.strip_markup, and all other files are skipped. Files that can't be parsed by the running Python are marked as unparsed and skipped, and they're retried on the next sync; non-Python repos only yield their prose.",
+   "gold_files": [
+    "ADRs/connectors/github.md"
+   ],
+   "episode": "11a0ad5c-3a5c-5843-9518-2617f59ab38d"
+  },
+  {
+   "id": "G20",
+   "category": "code",
+   "question": "How are privileges and roles structured between app_connector and app_ingest, and why was this separation made?",
+   "gold": [],
+   "gold_answer": "app_connector derives and cannot claim, while app_ingest claims for uploads and backfills without a workspace; both inherit the app_user privilege bundle so grants are centralized. The separation is structural: with one role, a connector worker could mistakenly set app.tenant_id instead of app.workspace_id and silently downgrade security, but with separate roles, such mistakes are denied because the resolver never reads app.tenant_id for that role.",
+   "gold_files": [
+    "ADRs/supabase/security.md"
+   ],
+   "episode": "7dec2e2d-ba01-58ff-a771-21154e468a8d"
+  },
+  {
+   "id": "G21",
+   "category": "code",
+   "question": "How does the encode_episode function handle character position offsets when encoding an episode?",
+   "gold": [],
+   "gold_answer": "The encode_episode function subtracts the prefix from every character position so that offsets are returned in the episode's own coordinates, preventing spans from addressing the wrong tokens.",
+   "gold_files": [
+    "server/public/src/inject/src/3_encode.py"
+   ],
+   "episode": "23c267df-4d99-59bd-bf4e-0d8689abab76"
+  },
+  {
+   "id": "G22",
+   "category": "code",
+   "question": "How does the system decide which function or method calls to keep in the knowledge graph, and why are some calls dropped?",
+   "gold": [],
+   "gold_answer": "A call is kept if its head resolves through an import, a same-module definition, or self.m where m is defined on the class, while builtins, standard library calls, and calls on local variables are dropped. This prevents generic functions like json/len or database executes from becoming oversized hubs in the graph, and avoids unnecessary processing since later filtering would be more costly.",
+   "gold_files": [
+    "ADRs/connectors/github.md"
+   ],
+   "episode": "7a73edb7-7ea1-51d3-ace5-779e6b304bf7"
+  },
+  {
+   "id": "G23",
+   "category": "code",
+   "question": "Why don't we use offsets or ordinals to track episodes in documents?",
+   "gold": [],
+   "gold_answer": "Keying on offsets would renumber every episode below any insertion and re-extract paragraphs whose text never changed, so episodes keep their identity even when edits move them. Therefore, episodes carry no position, and there is no ordered episode_ids array on files.",
+   "gold_files": [
+    "ADRs/supabase/tables.md"
+   ],
+   "episode": "eaf1152c-bed2-5b6d-88ce-185c1983a8f6"
+  },
+  {
+   "id": "G24",
+   "category": "code",
+   "question": "How do we handle Slack file attachments in the knowledge graph, especially if the same file is shared in multiple channels?",
+   "gold": [],
+   "gold_answer": "A Slack file is stored as a separate files row keyed on Slack's file_id, so the same PDF shared in three channels is treated as one document, deduplicated by (source, external_id). The link between a discussion and its attachment isn't explicitly modeled, but co-occurrence of entities in threads and files usually recovers the connection.",
+   "gold_files": [
+    "ADRs/slack/connector.md"
+   ],
+   "episode": "10f9621a-f826-5b65-8723-43d76aaeaebc"
+  },
+  {
+   "id": "G25",
+   "category": "code",
+   "question": "Why do we use text columns with check constraints instead of varchar(n) in our Supabase tables?",
+   "gold": [],
+   "gold_answer": "Postgres stores text and varchar(n) identically, with the only difference being a length check. Using a check constraint allows us to express the same rule, combine length with format, and makes changes cheaper, whereas altering a column type is not; most length limits are arbitrary anyway, so we should constrain what the domain actually requires.",
+   "gold_files": [
+    "ADRs/supabase/tables.md"
+   ],
+   "episode": "7e0ed909-c93e-58ee-bb07-ad2233d2c5f4"
+  },
+  {
+   "id": "G26",
+   "category": "code",
+   "question": "How does combining the graph and text channels affect question answering performance as the codebase grows?",
+   "gold": [],
+   "gold_answer": "Fusing the graph and text channels at the passage level improves performance, with hybrid_8 achieving 27/28 correct answers after the codebase grew, while the graph-only approach dropped to 12/28. This fusion maintains each channel's ranking and ensures robustness, especially as duplicates increase in the corpus.",
+   "gold_files": [
+    "ADRs/supabase/tables.md"
+   ],
+   "episode": "b2dd7af3-81e8-5252-8d3c-c2c741f68e22"
+  },
+  {
+   "id": "G27",
+   "category": "code",
+   "question": "How does the system decide which chains shouldn't become entities in the knowledge graph, especially when dealing with contested names?",
+   "gold": [],
+   "gold_answer": "A chain is not made into an entity if its only names are contested surfaces and it hasn't merged with anything else, since it can't be anchored to a real identity. The function returns a mapping from such chain IDs to candidate cluster IDs (entities already using the contested surface), and if there are no candidates, the chain is left as an unlinked mention.",
+   "gold_files": [
+    "server/public/src/inject/src/4_link.py"
+   ],
+   "episode": "ba8c0dd4-0878-5ce9-a6a9-ce6c09bd33b2"
+  },
+  {
+   "id": "G28",
+   "category": "code",
+   "question": "How are facts and their sources represented in the schema, and what is the current limitation with explaining relationships between entities?",
+   "gold": [],
+   "gold_answer": "Enrichment returns facts with attribution, and reified facts are what make answers explicable and permission-checkable, but these are not yet in the schema. Currently, co-occurrence only tells the walk which entities are near each other, never why.",
+   "gold_files": [
+    "ADRs/supabase/tables.md"
+   ],
+   "episode": "3c9642bc-351e-5bea-a265-7dad1097e103"
+  },
+  {
+   "id": "G29",
+   "category": "code",
+   "question": "How should I format and check Python code in this project, and what are the main style rules I need to follow?",
+   "gold": [],
+   "gold_answer": "Use Ruff for formatting and checking: 'uv run ruff format .' to format, 'uv run ruff check .' to check, and 'uv run ruff check . --fix' to fix issues. Key style rules include an 88-character line length, import sorting, unused import removal, string line wrapping with parentheses, multi-line function calls with proper indent, and splitting imports into multiple lines; for type checking, use 'uv run pyright' and ensure explicit None checks for Optionals and type narrowing for strings.",
+   "gold_files": [
+    "CLAUDE.md"
+   ],
+   "episode": "10ac49b4-f1b9-532d-a767-8eb4c8531dc4"
+  },
+  {
+   "id": "G30",
+   "category": "code",
+   "question": "How does the system decide whether to merge, split, or escalate a pair to the LLM based on probability scores?",
+   "gold": [],
+   "gold_answer": "A single threshold forces a decision when features can't distinguish between pairs, while two thresholds allow the scorer to abstain and only send genuinely uncertain pairs to the model.",
+   "gold_files": [
+    "server/public/src/inject/src/4_link.py"
+   ],
+   "episode": "ae60a49d-bd42-5a6d-94d3-0492a2d71d68"
+  },
+  {
+   "id": "G31",
+   "category": "vault",
+   "question": "What issues did we run into with the website's mobile rendering, and what ideas do we have for improving it?",
+   "gold": [],
+   "gold_answer": "The automated chunk-based scroll did not work well on smaller screens, and another idea was to actually change the content on the phone to make it easier for people to read and digest information, though that may be a task for later.",
+   "gold_files": [
+    "vault:earlier/r87/days/Day 35.md"
+   ],
+   "episode": "7684818f-a82c-5895-8b10-02eb89092b00"
+  },
+  {
+   "id": "G32",
+   "category": "vault",
+   "question": "How does this project define the difference between passive, aggressive, and assertive ways of expressing needs in a conflict?",
+   "gold": [],
+   "gold_answer": "Passive is when only the other person's needs are expressed and mine are not, leading to unresolved needs and resentment. Aggressive is when my needs are expressed without allowing the other person to express theirs, often through force or blame, which can cause retaliation or escalation, while assertive means both parties express their needs without attacking each other, making it the only practical way to resolve conflicts.",
+   "gold_files": [
+    "vault:earlier/essays/What is this thing Passive Aggression.md"
+   ],
+   "episode": "1db80bd7-cb48-5695-b6c1-062fc63bd89c"
+  },
+  {
+   "id": "G33",
+   "category": "vault",
+   "question": "Can you explain the difference between identification, authentication, and authorization in our IAM setup?",
+   "gold": [],
+   "gold_answer": "Identification is claiming who you are, authentication is proving the claim about who you are, and authorization is deciding what a proven identity can or cannot do.",
+   "gold_files": [
+    "vault:earlier/Identity and Access Management (IAM).md"
+   ],
+   "episode": "31912d48-f64e-5ffe-bd8d-d303ceb1f331"
+  },
+  {
+   "id": "G34",
+   "category": "vault",
+   "question": "How do we represent the relationship between users and tenants, and what roles can users have within a tenant?",
+   "gold": [],
+   "gold_answer": "The MEMBERSHIPS table links users to tenants and includes a 'role' field, which can be 'owner', 'admin', or 'member'.",
+   "gold_files": [
+    "vault:earlier/architecture/data model.md"
+   ],
+   "episode": "484205f3-6729-5916-ad6a-9e683ecea017"
+  },
+  {
+   "id": "G35",
+   "category": "vault",
+   "question": "How should we approach getting our first users for the Slack assistant, and what strategies from 'Do Things that Don't Scale' are relevant here?",
+   "gold": [],
+   "gold_answer": "We should recruit users manually and give them an extraordinarily good experience, focusing on a deliberately small segment\u2014ideally startups, since they're more open to new things and haven't made all their decisions yet. Low-effort, high-profile tactics like big launches or partnerships don't work at this stage; effortful, personal engagement is key.",
+   "gold_files": [
+    "vault:earlier/Do Things that Don't Scale Notes.md"
+   ],
+   "episode": "4db62ed6-d037-50e5-9c59-9f306a0724e3"
+  },
+  {
+   "id": "G36",
+   "category": "vault",
+   "question": "What improvements were made to the entity and relationship extraction process in the pipeline recently?",
+   "gold": [],
+   "gold_answer": "The prompts for entity extraction, entity deduplication, and relation extraction were improved, and the extraction issues were addressed, though there's a trade-off between pulling only real entities and losing some facts, resulting in some entities being micro-phrases that describe a complete entity.",
+   "gold_files": [
+    "vault:earlier/r87/days/Day 27.md"
+   ],
+   "episode": "aaef7d9e-5f15-5b88-894c-5d9c43500375"
+  },
+  {
+   "id": "G37",
+   "category": "vault",
+   "question": "\u042f\u043a \u0430\u0432\u0442\u043e\u0440 \u043f\u043e\u044f\u0441\u043d\u044e\u0454, \u0447\u043e\u043c\u0443 \u0431\u043b\u0438\u0437\u044c\u043a\u0456 \u043b\u044e\u0434\u0438 \u043c\u043e\u0436\u0443\u0442\u044c \u043f\u043e\u0432\u043e\u0434\u0438\u0442\u0438\u0441\u044f \u043f\u0430\u0441\u0438\u0432\u043d\u043e-\u0430\u0433\u0440\u0435\u0441\u0438\u0432\u043d\u043e, \u043d\u0430\u0432\u0456\u0442\u044c \u044f\u043a\u0449\u043e \u0432\u043e\u043d\u0438 \u0449\u0438\u0440\u0456 \u0442\u0430 \u0440\u043e\u0437\u0443\u043c\u043d\u0456?",
+   "gold": [],
+   "gold_answer": "\u0412\u0456\u043d \u0432\u0432\u0430\u0436\u0430\u0454, \u0449\u043e \u0432\u043e\u043d\u0438 \u043d\u0435 \u0437\u0430\u0432\u0436\u0434\u0438 \u0443\u0441\u0432\u0456\u0434\u043e\u043c\u043b\u044e\u044e\u0442\u044c \u0441\u0432\u043e\u0457 \u043e\u0431\u0440\u0430\u0437\u0438 \u0442\u0430 \u043d\u0435 \u0431\u0430\u0447\u0430\u0442\u044c, \u0449\u043e \u0457\u0445\u043d\u044f \u043f\u043e\u0432\u0435\u0434\u0456\u043d\u043a\u0430 \u0454 \u043f\u0430\u0441\u0438\u0432\u043d\u043e-\u0430\u0433\u0440\u0435\u0441\u0438\u0432\u043d\u043e\u044e, \u043f\u043e\u0434\u0456\u0431\u043d\u043e \u0434\u043e \u0434\u0438\u0442\u0438\u043d\u0438, \u044f\u043a\u0430 \u043d\u0435 \u0437\u043d\u0430\u0454 \u043f\u0440\u043e \u0433\u0440\u0430\u0432\u0456\u0442\u0430\u0446\u0456\u044e \u0439 \u043d\u0435 \u043c\u043e\u0436\u0435 \u0437\u0430\u043f\u043e\u0431\u0456\u0433\u0442\u0438 \u0440\u043e\u0437\u0431\u0438\u0442\u0442\u044e \u0442\u0430\u0440\u0456\u043b\u043a\u0438.",
+   "gold_files": [
+    "vault:earlier/what is passive aggression even shorter.md"
+   ],
+   "episode": "7b23840c-4c8a-5de0-96d8-87a572220acd"
+  },
+  {
+   "id": "G38",
+   "category": "vault",
+   "question": "How does the podcast suggest handling confidence and emotional balance when dealing with wins and losses?",
+   "gold": [],
+   "gold_answer": "It suggests maintaining confidence without letting it get too high to avoid getting sloppy, moderating celebratory activities, and being a counterweight to people's emotions. Balance comes from not overindulging but also not remaining inactive.",
+   "gold_files": [
+    "vault:earlier/NAVY guy podcast.md"
+   ],
+   "episode": "11cf82d1-23e1-5460-860e-ec6f7fe9994a"
+  },
+  {
+   "id": "G39",
+   "category": "vault",
+   "question": "How does Nazar help with the problem of people constantly asking questions in team chats instead of searching for information themselves?",
+   "gold": [],
+   "gold_answer": "Nazar can connect to the chat, scrape all the messages, capture unstructured knowledge, make it structured, and answer questions based on the chat, helping to centralize informal unstructured knowledge and reduce repetitive questions.",
+   "gold_files": [
+    "vault:earlier/conversation with Tess 2.md"
+   ],
+   "episode": "ca22d854-b16c-56d3-8740-67ce0fb7a8b2"
+  },
+  {
+   "id": "G40",
+   "category": "vault",
+   "question": "How can we address passive-aggressive behavior when someone refuses to change?",
+   "gold": [],
+   "gold_answer": "The way to solve it is to educate them about the accumulation of emotions, the expression of feelings, and the unaware-harm problem, and to discuss the change openly \u2014 similarly to how you would educate a child (maybe in a simplistic way) that when you drop things, they shatter.",
+   "gold_files": [
+    "vault:earlier/essays/What is this thing Passive Aggression.md"
+   ],
+   "episode": "f6e9f5fd-633e-598f-8ab8-b20a27c4a5e9"
+  },
+  {
+   "id": "G41",
+   "category": "vault",
+   "question": "What are the main Canadian immigration options we're considering for Nazar, and what are the key requirements for each?",
+   "gold": [],
+   "gold_answer": "Option 1 is CES Express Entry, which requires 1,560 hours of NOC TEER 0-3 work within 3 years, documented with T4s, IELTS, and third-party employment (not self-employment). Option 2 is the Startup Visa, needing a letter from an incubator, startup ownership, CLB 5 language, about $13,000 CAD in settlement funds, and an incorporated company, with a 30-38 month wait; Option 3 is a combination of the first two, and Option 4 is the OINP Entrepreneur Stream, which involves Ontario nomination, a business plan, investment threshold, Ontario ties, and active business operation.",
+   "gold_files": [
+    "vault:earlier/PR Application.md"
+   ],
+   "episode": "21805776-a29f-558a-a516-af16eaad3b7f"
+  },
+  {
+   "id": "G42",
+   "category": "vault",
+   "question": "How are we currently handling deduplication and canonicalization of entities in the knowledge graph, and what embedding model are we using for this?",
+   "gold": [],
+   "gold_answer": "It's a multistep process: first, the LLM extracts entity candidates and their context; then we batch embed them using the 'mixedbread-ai/mxbai-embed-large-v1' model with a batch size of 16; after that, we cluster (currently preferring HDBSCAN), and finally, an LLM merges entities in each cluster based on context.",
+   "gold_files": [
+    "vault:earlier/r87/days/Day 25.md"
+   ],
+   "episode": "c0dad945-89c8-5bea-89b2-126c3055d120"
+  },
+  {
+   "id": "G43",
+   "category": "vault",
+   "question": "What are some good ways to phrase questions during user interviews for Nazar, and which types of questions should we avoid?",
+   "gold": [],
+   "gold_answer": "Good questions focus on understanding the user's current behavior, challenges, and workflow, such as 'Talk me through the last time it has happened?' or 'What have you tried?'. Bad questions are those that ask for opinions or hypothetical future actions, like 'Would you buy a product that did X?' or 'How much would you pay for X?'.",
+   "gold_files": [
+    "vault:earlier/Mom Test Notes.md"
+   ],
+   "episode": "86714408-5dc7-5ba0-abb8-da16165f14e3"
+  },
+  {
+   "id": "G44",
+   "category": "vault",
+   "question": "What are the main options for running language models for Nazar, and what are the tradeoffs between using a closed API versus managed inference with open models?",
+   "gold": [],
+   "gold_answer": "There are two main options: using a closed API from major providers like Anthropic or OpenAI, which offer standard or zero data retention policies and are generally the best approach for most cases, or using open models on managed inference platforms like Groq or Amazon Bedrock, which provide zero data retention by default and more flexibility for regulated clients but require more setup and technical management.",
+   "gold_files": [
+    "vault:earlier/r87/days/Day 3.md"
+   ],
+   "episode": "6877845c-6629-528f-aab9-fae588a020bf"
+  },
+  {
+   "id": "G45",
+   "category": "vault",
+   "question": "Why is it important for us to have a model that encourages everyone to use the same tools in our workflow?",
+   "gold": [],
+   "gold_answer": "If everyone uses the same tools, reviews are easier because people can better understand what others have made, and it's easier to rederive someone else's work since the model guides them consistently. This consistency also helps fill skill gaps, gives more control, and increases efficiency because everyone knows the same things instead of getting lost in unfamiliar territory.",
+   "gold_files": [
+    "vault:earlier/conversation with Tess 2.md"
+   ],
+   "episode": "62bd657e-2c60-579e-b56a-4d5eca085dde"
+  },
+  {
+   "id": "G46",
+   "category": "vault",
+   "question": "How is the database structured now that it's pushed to Aura DB, and what do you get when you create a new instance?",
+   "gold": [],
+   "gold_answer": "There is a simple hierarchical structure: Organizations, Projects, and Instances. When you create an instance, you get the credentials to add into the code and manage access/users within instances.",
+   "gold_files": [
+    "vault:earlier/r87/days/Day 28.md"
+   ],
+   "episode": "f6d2eb9a-2f5d-5e7a-876c-6afcb383e17c"
+  },
+  {
+   "id": "G47",
+   "category": "vault",
+   "question": "Who are the main users that would benefit from our assistant's ability to give good answers even when people ask bad questions?",
+   "gold": [],
+   "gold_answer": "It's especially valuable for people who don't know how to ask the right question but still need a good or satisfying answer, such as new interns in companies, new users of documentation, or QA agents facing problems that RAG alone can't solve.",
+   "gold_files": [
+    "vault:earlier/searchx/what I do.md"
+   ],
+   "episode": "0397555a-3d07-5e4a-998c-934e609ed289"
+  },
+  {
+   "id": "G48",
+   "category": "vault",
+   "question": "How did the demo development for Tess go and what was the mood during the process?",
+   "gold": [],
+   "gold_answer": "Initially, there was avoidance and low confidence about building the demo for Tess, but after working through it, the demo was basically ready and the mood turned very positive.",
+   "gold_files": [
+    "vault:earlier/r87/mood logs/Jul 14.md"
+   ],
+   "episode": "8697e16c-eeda-5f5c-9ed2-128858fe4e3b"
+  },
+  {
+   "id": "G49",
+   "category": "vault",
+   "question": "Why do we need to explicitly qualify table and schema names when working with the internal schema, and what happens if we don't?",
+   "gold": [],
+   "gold_answer": "References become internal.slack_teams, including FK definitions, helper function bodies, and any query in your app. Definer functions with SET search_path = public, pg_temp won't find internal objects unless qualified, which is correct because explicit qualification is what you want there anyway.",
+   "gold_files": [
+    "vault:earlier/Untitled.md"
+   ],
+   "episode": "120bca71-e34c-5040-9dfa-2f8e3b422b44"
+  },
+  {
+   "id": "G50",
+   "category": "vault",
+   "question": "How should we structure explanations when Nazar is helping users learn new technical concepts?",
+   "gold": [],
+   "gold_answer": "When learning a new concept, explanations should surface adjacent concepts one hop out (the surrounding 'unknown unknowns'), and use causal-chain 'story' explanations where each feature is introduced as a repair of the previous feature's problem, focusing on functional reasons and ending with a compressed takeaway that names the recurring pattern.",
+   "gold_files": [
+    "vault:earlier/Meta/A spec for how I learn.md"
+   ],
+   "episode": "e1aa810c-a101-54ae-80b7-b3b159b14a13"
+  },
+  {
+   "id": "G51",
+   "category": "vault",
+   "question": "What updates were made to the website recently, and what's still left to do?",
+   "gold": [],
+   "gold_answer": "Minor text polish, an FAQ, and a waitlist form were added to the website, and a security page is in progress. Upcoming tasks include updating the comparison table to reflect only implemented features, learning what to add to the security page, and writing a brief inspiration page.",
+   "gold_files": [
+    "vault:earlier/r87/days/Day 33.md"
+   ],
+   "episode": "dcf3c123-2ed5-53ca-9b28-e399b4babc70"
+  },
+  {
+   "id": "G52",
+   "category": "vault",
+   "question": "\u0429\u043e \u043c\u043e\u0436\u0435 \u0441\u0442\u0430\u0442\u0438 \u043f\u0440\u0438\u0447\u0438\u043d\u043e\u044e \u043d\u0430\u043a\u043e\u043f\u0438\u0447\u0435\u043d\u043d\u044f \u043d\u0435\u0433\u0430\u0442\u0438\u0432\u043d\u0438\u0445 \u0435\u043c\u043e\u0446\u0456\u0439 \u0456 \u044f\u043a \u0432\u043e\u043d\u0438 \u043f\u0440\u043e\u044f\u0432\u043b\u044f\u044e\u0442\u044c\u0441\u044f \u0443 \u0432\u0438\u0433\u043b\u044f\u0434\u0456 \u043f\u0430\u0441\u0438\u0432\u043d\u043e\u0457 \u0430\u0433\u0440\u0435\u0441\u0456\u0457?",
+   "gold": [],
+   "gold_answer": "\u041d\u0435\u0433\u0430\u0442\u0438\u0432\u043d\u0456 \u0435\u043c\u043e\u0446\u0456\u0457 \u0432\u0438\u043d\u0438\u043a\u0430\u044e\u0442\u044c, \u043a\u043e\u043b\u0438 \u0432\u0430\u0441 \u043f\u0440\u043e\u0441\u044f\u0442\u044c \u0437\u0440\u043e\u0431\u0438\u0442\u0438 \u0449\u043e\u0441\u044c, \u0447\u043e\u0433\u043e \u0432\u0438 \u043d\u0435 \u0445\u043e\u0447\u0435\u0442\u0435, \u0430\u0431\u043e \u043a\u043e\u043b\u0438 \u0437 \u0432\u0430\u043c\u0438 \u043f\u043e\u0432\u043e\u0434\u044f\u0442\u044c\u0441\u044f \u043e\u0431\u0440\u0430\u0437\u043b\u0438\u0432\u043e, \u0456 \u044f\u043a\u0449\u043e \u0446\u0456 \u043f\u043e\u0447\u0443\u0442\u0442\u044f \u043d\u0435 \u0432\u0438\u0440\u0430\u0436\u0430\u044e\u0442\u044c\u0441\u044f \u0447\u0435\u0440\u0435\u0437 \u043d\u0435\u0431\u0435\u0437\u043f\u0435\u0447\u043d\u0438\u0439 \u043a\u043e\u043d\u0442\u0435\u043a\u0441\u0442, \u0432\u0438\u0441\u043e\u043a\u0443 \u0446\u0456\u043d\u0443, \u043d\u043e\u0440\u043c\u0438 \u0447\u0438 \u0432\u0456\u0434\u0441\u0443\u0442\u043d\u0456\u0441\u0442\u044c \u043d\u0430\u0432\u0438\u0447\u043a\u0438, \u0432\u043e\u043d\u0438 \u043d\u0430\u043a\u043e\u043f\u0438\u0447\u0443\u044e\u0442\u044c\u0441\u044f \u0456 \u0437\u0440\u0435\u0448\u0442\u043e\u044e \u043f\u0440\u043e\u044f\u0432\u043b\u044f\u044e\u0442\u044c\u0441\u044f \u0443 \u0444\u043e\u0440\u043c\u0456 \u043f\u0430\u0441\u0438\u0432\u043d\u043e\u0457 \u0430\u0433\u0440\u0435\u0441\u0456\u0457, \u044f\u043a\u0443 \u0432\u0430\u0436\u043a\u043e \u043a\u043e\u043d\u0444\u0440\u043e\u043d\u0442\u0443\u0432\u0430\u0442\u0438.",
+   "gold_files": [
+    "vault:earlier/what is passive aggression even shorter.md"
+   ],
+   "episode": "65671297-8948-55b9-bf47-fd28e1074bef"
+  },
+  {
+   "id": "G53",
+   "category": "vault",
+   "question": "Where should we put the updated architecture diagram once #1 and #2 are fixed?",
+   "gold": [],
+   "gold_answer": "Drop it into docs/adr/ next to the decision records it illustrates, because it now encodes about eight decisions from this conversation.",
+   "gold_files": [
+    "vault:earlier/r87/days/Day 44.md"
+   ],
+   "episode": "c80f4519-24a6-5198-b369-c02a2d81c638"
+  },
+  {
+   "id": "G54",
+   "category": "vault",
+   "question": "Why do we need to enforce Cloud Tasks OIDC authentication on the worker endpoint?",
+   "gold": [],
+   "gold_answer": "If the endpoint is reachable without it, anyone who can POST names any workspace and reads that tenant. The DB wall won't help \u2014 it will faithfully resolve whatever team it's told.",
+   "gold_files": [
+    "vault:earlier/Untitled.md"
+   ],
+   "episode": "caf759fc-04ae-53b6-8197-8c0cf2912449"
+  },
+  {
+   "id": "G55",
+   "category": "vault",
+   "question": "What factors does the note say influence hormone release in humans?",
+   "gold": [],
+   "gold_answer": "Both physiological and psychological factors are relevant to the release of hormones.",
+   "gold_files": [
+    "vault:earlier/essays/Thoughts on human condition and life.md"
+   ],
+   "episode": "4d4b8dba-c8ef-5894-be23-b0f8cb3c5b20"
+  },
+  {
+   "id": "G56",
+   "category": "vault",
+   "question": "How does supervised fine-tuning with reinforcement learning help models learn tool-calling in our assistant?",
+   "gold": [],
+   "gold_answer": "Supervised fine-tuning uses RL to train models to use tool-calling by penalizing the model based on whether the call happened (structured) and by using LLMs as judges.",
+   "gold_files": [
+    "vault:earlier/Meeting with Wyatt.md"
+   ],
+   "episode": "e5222683-22d5-5baa-a127-8438153df2cc"
+  },
+  {
+   "id": "G57",
+   "category": "vault",
+   "question": "How are we currently handling relationship extraction in the knowledge graph, and what changes were made to improve it?",
+   "gold": [],
+   "gold_answer": "Relationship extraction was initially done with a closed schema, but it didn't work well, so now it's open: the system generates an atomic fact for each entity-to-entity relationship and adds it as an edge description.",
+   "gold_files": [
+    "vault:earlier/r87/days/Day 26.md"
+   ],
+   "episode": "a97c2120-cb91-51d4-b137-cd44ab99ae5f"
+  },
+  {
+   "id": "G58",
+   "category": "vault",
+   "question": "What are some recent systems or papers related to building knowledge graphs from text that we should look at for inspiration?",
+   "gold": [],
+   "gold_answer": "Some recent systems and papers include SAC-KG, iText2KG, GraphRAG, HippoRAG, and Graphiti, each with different approaches like LLM-based extraction, OpenIE with personalized ranking, and temporal graph architectures.",
+   "gold_files": [
+    "vault:earlier/searchx/KMS knowledge/Papers.md"
+   ],
+   "episode": "ea6fe702-8579-5809-b58c-ff8c651d964e"
+  },
+  {
+   "id": "G59",
+   "category": "vault",
+   "question": "What are some of the main areas or fields that we're interested in exploring or learning more about for this project?",
+   "gold": [],
+   "gold_answer": "Some of the main areas include evolutionary biology, information theory, theory of learning (and its connection to design), cognitive psychology, graph theory, linear algebra, attention economics, economics, reinforcement learning, literature-based discovery, mechanism design, epistemology, cognitive linguistics, philosophy of science, complex systems theory, and cybernetics.",
+   "gold_files": [
+    "vault:Things I deeply want to learn/Areas.md"
+   ],
+   "episode": "6c75a052-edd4-5cfa-8de6-eb28c17adefb"
+  },
+  {
+   "id": "G60",
+   "category": "vault",
+   "question": "How should we approach finding our first users for the Slack assistant, and what should we focus on to give them a great experience?",
+   "gold": [],
+   "gold_answer": "We should start by solving our own problem and reaching out to our peers, or do an untargeted launch and see who sticks, then focus on giving those early users an extraordinary experience by minimizing friction and hidden costs like privacy concerns. It's important to target a deliberately small segment, such as startups, and ensure the product is easy to start using, possibly by making any files pluggable and having a clear privacy page.",
+   "gold_files": [
+    "vault:earlier/r87/days/Day 29.md"
+   ],
+   "episode": "a3826884-a158-59fb-aed2-22956d369189"
+  }
+ ]
+}

@@ -3,13 +3,20 @@ _metadata:
   minor_version: 1
 
 display_information:
-  name: Nazar
-  description: Your friend Nazar. Good friend. Nazar
-  background_color: "#1a1a1a"
+  name: Loupy
+  description: Answers from your team's notes and code, with the sources linked.
+  long_description: >-
+    Loupy reads the notes and code your team already keeps and answers
+    questions with the passages it used, linked so you can check them.
+    Mention @Loupy in a channel and it replies in the thread. It says when a
+    question rests on a premise the notes contradict, and asks which one you
+    mean when a name could be several things. It never reads direct messages
+    and only indexes what you connect.
+  background_color: "#1D1D1F"
 
 features:
   bot_user:
-    display_name: Nazar
+    display_name: Loupy
     always_online: true
   app_home:
     home_tab_enabled: false
@@ -20,12 +27,15 @@ oauth_config:
   redirect_urls:
     - https://extras-chevron-banish.ngrok-free.dev/slack/oauth/callback
   scopes:
+    # Exactly the set in ADRs/slack/connector.md entry 4. "Never DMs" is a
+    # scope decision: im:history / mpim:history must not be added here.
     bot:
       - app_mentions:read
+      - channels:history
+      - channels:read
       - chat:write
-      - chat:write.public
+      - files:read
       - users:read
-      - im:history
 
 settings:
   event_subscriptions:
@@ -33,6 +43,11 @@ settings:
     bot_events:
       - app_mention
       - app_home_opened
+      # Thread replies reach the server through this; every public-channel
+      # message in channels the bot is in arrives, is ACKed, and is dropped
+      # unless it is a reply in a thread Nazar already answered in (ADR slack 17).
+      - message.channels
+      # Already subscribed on the live app (im:history granted); DMs are dropped by the router today.
       - message.im
   interactivity:
     is_enabled: false

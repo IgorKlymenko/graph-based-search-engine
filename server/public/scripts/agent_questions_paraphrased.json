@@ -1,0 +1,373 @@
+{
+ "_doc": "The hand-written questions with identifiers removed.",
+ "questions": [
+  {
+   "id": "C1p",
+   "category": "code",
+   "question": "How do you generate the unique identifier for an episode, and why does a document keep the same identifier even when its content changes?",
+   "gold": [
+    "uuid5",
+    "sha1"
+   ],
+   "gold_answer": "file_id = uuid5 of tenant|source|external_id; episode_id = uuid5 of file_id plus sha1 of the text. A document is a container that is revised, so its id is stable; an episode is content, so its id changes with the text.",
+   "gold_files": [
+    "server/public/src/inject/src/1_episodes.py"
+   ]
+  },
+  {
+   "id": "C2p",
+   "category": "code",
+   "question": "What does the system do in the chains phase if none of the ongoing operations complete before the stall timeout expires?",
+   "gold": [
+    "abandoned",
+    "warning"
+   ],
+   "gold_answer": "The remaining calls are abandoned: a warning is printed, the HTTP client is closed so parked threads error out, and the generator ends; callers must treat those items as not done.",
+   "gold_files": [
+    "server/public/src/inject/src/2_chains.py"
+   ]
+  },
+  {
+   "id": "C3p",
+   "category": "code",
+   "question": "Why is the feature that prevents merging across explicit splits disabled by default in the component that connects entities, and how did it perform compared to the basic merging approach?",
+   "gold": [
+    "0.774",
+    "0.945"
+   ],
+   "gold_answer": "Blocking merges across explicit splits scored 0.774 CoNLL against 0.945 for plain union-find on the same decisions, so the constraint is off by default.",
+   "gold_files": [
+    "server/public/src/inject/src/4_link.py"
+   ]
+  },
+  {
+   "id": "C4p",
+   "category": "code",
+   "question": "Which types of surfaces are included as entries in the surfaces table, and what is the reason for excluding pronouns from this table?",
+   "gold": [
+    "identifying",
+    "pronoun"
+   ],
+   "gold_answer": "Only identifying surfaces are rows. A pronoun is how the model linked mentions, not a name; stored, it would become a seed matching every question.",
+   "gold_files": [
+    "server/public/src/inject/src/5_store.py"
+   ]
+  },
+  {
+   "id": "C5p",
+   "category": "code",
+   "question": "How do connector keys determine whether a pair of chains should be considered the same or different, and which pairs are excluded from being reviewed based on their connector keys?",
+   "gold": [
+    "keys_settle",
+    "different keys"
+   ],
+   "gold_answer": "Two chains with different connector keys are two things, and a keyed chain beside an unkeyed one is a symbol beside prose; such pairs are not sent to the reviewer.",
+   "gold_files": [
+    "server/public/src/inject/src/4_link.py"
+   ]
+  },
+  {
+   "id": "C6p",
+   "category": "code",
+   "question": "Why doesn't the linker adjust the context vector to remove the average value?",
+   "gold": [
+    "0.898",
+    "centering"
+   ],
+   "gold_answer": "Episode-centering removes the episode's shared component and the entity's own signal with it: centered AUC 0.505, uncentered 0.898.",
+   "gold_files": [
+    "server/public/src/inject/src/4_link.py"
+   ]
+  },
+  {
+   "id": "C7p",
+   "category": "code",
+   "question": "How does the system select the main element of a chain if the model's initial selection does not pass the validation step?",
+   "gold": [
+    "proper name",
+    "definite description"
+   ],
+   "gold_answer": "It falls back within the chain: proper name, then definite description, then the longest span, rather than discarding the chain.",
+   "gold_files": [
+    "server/public/src/inject/src/2_chains.py",
+    "server/public/src/inject/utils/spans.py"
+   ]
+  },
+  {
+   "id": "C8p",
+   "category": "code",
+   "question": "What sequence of actions does the Slack entry point take when it receives a new event?",
+   "gold": [
+    "verify",
+    "dedupe",
+    "ACK"
+   ],
+   "gold_answer": "Verify the signature on the raw bytes, dedupe, ACK within the budget, then answer in the thread from a background task.",
+   "gold_files": [
+    "server/public/src/app.py"
+   ]
+  },
+  {
+   "id": "C9p",
+   "category": "code",
+   "question": "How long does it take for the vector cache to process one episode and to load the model, compared to reloading the cache file?",
+   "gold": [
+    "63 ms",
+    "14.5 s"
+   ],
+   "gold_answer": "A forward pass costs 63 ms per episode plus a 14.5 s model load, against 11 ms to reload the cache file, so a re-link over an unchanged corpus skips every pass.",
+   "gold_files": [
+    "server/public/src/inject/main.py"
+   ]
+  },
+  {
+   "id": "C10p",
+   "category": "code",
+   "question": "When updating connections, which pairs are evaluated again?",
+   "gold": [
+    "previous",
+    "share a surface"
+   ],
+   "gold_answer": "Only pairs that could have changed: those touching a chain not linked last time, and old pairs whose chains share a surface with a new one.",
+   "gold_files": [
+    "server/public/src/inject/main.py"
+   ]
+  },
+  {
+   "id": "C11p",
+   "category": "code",
+   "question": "What are the maximum allowed resource limits set for the user accounts that are used to sign in?",
+   "gold": [
+    "statement_timeout",
+    "idle_in_transaction_session_timeout"
+   ],
+   "gold_answer": "statement_timeout 30s and idle_in_transaction_session_timeout 10s, set on the login roles because per-role settings are not inherited.",
+   "gold_files": [
+    "ADRs/supabase/security.md"
+   ]
+  },
+  {
+   "id": "C12p",
+   "category": "code",
+   "question": "Which database role is responsible for taking ownership of a tenant, and which one determines the tenant based on information from the connector and workspace identifier?",
+   "gold": [
+    "app_ingest",
+    "app_connector"
+   ],
+   "gold_answer": "app_ingest claims a tenant (uploads, backfills); app_connector derives it from the connector and workspace id and cannot claim one.",
+   "gold_files": [
+    "ADRs/supabase/security.md"
+   ]
+  },
+  {
+   "id": "C13p",
+   "category": "code",
+   "question": "When does the process that combines a model chain with a seed occur?",
+   "gold": [
+    "same offsets",
+    "same text"
+   ],
+   "gold_answer": "When a model span touches a seed span: the same offsets or the same text, whatever the parser typed it as.",
+   "gold_files": [
+    "server/public/src/inject/src/2_chains.py"
+   ]
+  },
+  {
+   "id": "C14p",
+   "category": "code",
+   "question": "Why does the system check that the identifiers for spans provided by the coreference model are valid?",
+   "gold": [
+    "UnknownSpanIds"
+   ],
+   "gold_answer": "Ids not issued are a protocol violation: UnknownSpanIds is raised, the caller retries once, then fails the episode. Ids instead of generated text are only worth anything if checked.",
+   "gold_files": [
+    "server/public/src/inject/src/2_chains.py"
+   ]
+  },
+  {
+   "id": "C15p",
+   "category": "code",
+   "question": "How does the process that removes formatting handle references to other documents in the knowledge base?",
+   "gold": [
+    "Potential Markets",
+    "plain text"
+   ],
+   "gold_answer": "Wiki link targets survive as plain text, because [[Potential Markets]] is a deliberate reference and one of the few cross-document signals a vault gives.",
+   "gold_files": [
+    "server/public/src/inject/src/1_episodes.py"
+   ]
+  },
+  {
+   "id": "C16p",
+   "category": "code",
+   "question": "Why does the approximate nearest neighbor blocking method use the representation based on the name instead of the one based on the context?",
+   "gold": [
+    "0.98",
+    "0.745"
+   ],
+   "gold_answer": "The name vector measured AUC 0.98+ for identity while the context vector reaches 0.745, so neighbours in name space are the ones worth examining.",
+   "gold_files": [
+    "server/public/src/inject/src/4_link.py"
+   ]
+  },
+  {
+   "id": "C17p",
+   "category": "stale",
+   "question": "Why does the system use the average ranking of entities to score episodes instead of adding up the rankings or taking only the highest one?",
+   "gold": [
+    "mean",
+    "25th"
+   ],
+   "gold_answer": "max ties every episode holding the top entity and sum rewards long notes; on the vault the answering notes ranked 25th under sum, 10th under max, 7th under mean.",
+   "gold_files": [
+    "server/public/src/query/retrieve.py"
+   ]
+  },
+  {
+   "id": "C18p",
+   "category": "stale",
+   "question": "How does the assistant transform a follow-up message in a conversation into an independent question?",
+   "gold": [
+    "needs_lookup",
+    "standalone"
+   ],
+   "gold_answer": "A gpt-4.1-mini call rewrites the latest message as a standalone question and returns needs_lookup, false for acknowledgements and rewrites.",
+   "gold_files": [
+    "server/public/src/query/thread.py"
+   ]
+  },
+  {
+   "id": "V1p",
+   "category": "vault",
+   "question": "Why can't we use the graph database we tried before for our knowledge graph, and what other database setup should we use instead?",
+   "gold": [
+    "linear pricing",
+    "Supabase"
+   ],
+   "gold_answer": "Neo4j's linear per-tenant pricing forces a silo per customer; the alternative is Supabase with shared infrastructure (bridge or pool model).",
+   "gold_files": [
+    "vault:earlier/scalability.md"
+   ]
+  },
+  {
+   "id": "V2p",
+   "category": "vault",
+   "question": "What is the approach where all tenants' data is stored together in one database and separated by a column or security rules?",
+   "gold": [
+    "Pool model",
+    "single schema"
+   ],
+   "gold_answer": "A fully shared database with a single schema where data is separated by a tenant_id column or row-level security; what we have now.",
+   "gold_files": [
+    "vault:earlier/scalability.md"
+   ]
+  },
+  {
+   "id": "V3p",
+   "category": "vault",
+   "question": "Which organizations are the best initial customers for our product?",
+   "gold": [
+    "seed",
+    "series A"
+   ],
+   "gold_answer": "Startups that have just raised seed or Series A and want growth: they explore, use AI tools heavily, and can take the product as an MCP tool.",
+   "gold_files": [
+    "vault:earlier/buyers.md"
+   ]
+  },
+  {
+   "id": "V4p",
+   "category": "vault",
+   "question": "Why did you choose the clustering method that finds dense groups and identifies outliers instead of the one based on pairwise similarities?",
+   "gold": [
+    "HDBSCAN",
+    "noise"
+   ],
+   "gold_answer": "HDBSCAN is more stable, gives denser clusters and can map out noise (singleton concepts), though unstable while clusters are small.",
+   "gold_files": [
+    "vault:earlier/r87/days/Day 23.md"
+   ]
+  },
+  {
+   "id": "V5p",
+   "category": "vault",
+   "question": "What was incorrect about the idea that averaging the context span would help identify entities?",
+   "gold": [
+    "mean pooling",
+    "whole episode"
+   ],
+   "gold_answer": "It embeds the general episode context rather than the entity, because it attends to the whole episode, so it is a bad predictor of identity across documents.",
+   "gold_files": [
+    "vault:earlier/r87/days/Day 52.md"
+   ]
+  },
+  {
+   "id": "V6p",
+   "category": "vault",
+   "question": "Why is it better to use row-level security at the schema level instead of adding a filter condition to every query?",
+   "gold": [
+    "N places",
+    "1 place"
+   ],
+   "gold_answer": "A WHERE in each query is N places to make a mistake; RLS bound to the schema is one place, easier to manage and more restrictive.",
+   "gold_files": [
+    "vault:earlier/Row-Level Security (RLS).md"
+   ]
+  },
+  {
+   "id": "V7p",
+   "category": "vault",
+   "question": "How does the system determine the connections between entities during the process of handling queries?",
+   "gold": [
+    "PMI",
+    "self-join"
+   ],
+   "gold_answer": "By a self-join of chains on episode_id, PMI-weighted; the edges are derived, not stored, and feed PPR.",
+   "gold_files": [
+    "vault:earlier/architecture/query/query data flow.md"
+   ]
+  },
+  {
+   "id": "V8p",
+   "category": "vault",
+   "question": "After finishing the schema updates, what is the most significant unresolved security issue?",
+   "gold": [
+    "Cloud Tasks OIDC"
+   ],
+   "gold_answer": "Cloud Tasks OIDC on the worker endpoint: everything in the wall trusts that app.workspace_id is genuine.",
+   "gold_files": [
+    "vault:earlier/architecture/database.md",
+    "ADRs/supabase/security.md"
+   ]
+  },
+  {
+   "id": "X1p",
+   "category": "cross",
+   "question": "What are the differences in what each of the three application roles is allowed to claim or access?",
+   "gold": [
+    "app_connector",
+    "app_ingest",
+    "app_ack"
+   ],
+   "gold_answer": "app_connector derives the tenant from connector plus workspace and cannot claim one; app_ingest claims a tenant for uploads; app_ack only inserts events and reads nothing.",
+   "gold_files": [
+    "ADRs/supabase/security.md",
+    "vault:earlier/architecture/database.md"
+   ]
+  },
+  {
+   "id": "X2p",
+   "category": "cross",
+   "question": "What are the maximum number of connections and the duration limits for statements for the connector, the component that brings data in, and the component that acknowledges events?",
+   "gold": [
+    "30/10/40",
+    "5s"
+   ],
+   "gold_answer": "Statement timeouts 30s/30s/5s and connection limits 30/10/40 for connector, ingest and ack.",
+   "gold_files": [
+    "vault:earlier/architecture/database.md",
+    "ADRs/supabase/security.md"
+   ]
+  }
+ ]
+}

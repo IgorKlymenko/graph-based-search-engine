@@ -609,6 +609,93 @@ does work is dividing an entity's score by `sqrt(its surface count)`: MRR 0.689
 
 
 
+### 30. Surfaces are judged for name-hood at ingest; descriptions never seed or become entities — *Accepted*
+
+**Context.** Roughly a quarter of top-1 retrieval seeds landed on junk entities
+(`the freeze`, `the change`) under every weighting tried (open item above). On
+the author's 154-note vault, 410 stratified surfaces were hand-labelled: only
+17% are names by the policy "would the author look this up by this string, and
+does it denote one specific thing". By parser type: 31% of `proper_name`, 9% of
+`nominal`, 11% of `definite_description`.
+
+**Decision.** One LLM call per forty *new* surfaces at ingest, on the surface
+in its own 240-character context (`src/inject/utils/judge.py`), as a cascade:
+`gpt-4.1-mini` first, and only what it keeps goes to `gpt-4.1`. Cached in the
+store by surface. The verdict is written to `surfaces.is_name` (migration
+`20260917150000`). A judged non-name is dropped from a chain's identity like a
+pronoun; a chain with no name left is withheld (`entity_id` NULL, the mechanism
+contested names already use); seeding and embedding skip `is_name = false`.
+`NULL` means not judged and is read as a name, so older corpora keep working.
+
+**Why not a rule, and why not the coref prompt.** *Measured.* Against the hand
+labels the best cheap rule (proper-or-capitalised with a non-generic head noun)
+reaches F1 0.445; today's `is_identifying` is 0.288. A "look-up test" paragraph
+added to the coref prompt changed the output by 2% of surfaces and no precision
+— under the ids-only protocol the model groups what the parser marked and does
+not leave things out. A separate judge reaches F1 0.80 with `gpt-4.1`
+(precision 0.68, recall 0.97) and 0.53 with `gpt-4.1-mini`, which keeps
+everything gold keeps and twice as much junk; that recall is what makes the
+cascade safe, and mini-then-4.1 scores F1 0.82 with 44% of surfaces reaching
+the strong model. The prompt went through three versions against the labels
+(`demos/eval_junk_gold.py`); normalising determiners and markup before judging
+and an explicit "capitalisation is not a name" rule were worth 0.08 F1. On the synthetic expansion rig, removing the noise hubs cut 70% of the
+edges and made the walk indifferent to alpha (bridge reach 1.0 at alpha 0.5,
+from 0.44); removing descriptions *by type* instead cost a quarter of recall.
+
+**Cost.** About 100 tokens per surface once; a vault-sized corpus is a few
+thousand surfaces, and a sync judges only what is new. The judge is an opinion:
+two models agree at kappa 0.55, disagreeing mostly on definite descriptions, and
+the hand labels are one person's policy. `--no-judge` restores the old
+behaviour; `--judge-models` sets the cascade.
+
+**Revisit when.** Users can correct entities (a "this is a name" override should
+outrank the judge), or when the withheld mentions need a retrieval path of
+their own.
+
+
+### 31. A text channel beside the graph walk — *Accepted, measured*
+
+**Context.** The walk retrieves what the graph can reach: passages whose
+entities the question names or that PPR can step to. Measured on 28 questions
+an agent asks about this project (`server/public/scripts/eval_agent_tokens.py`,
+2026-09-19), graph-only retrieval had the answering passage in the top eight
+for 14; the misses were structural, not tuning: a long docstring splits into
+episodes and the continuation names no symbol (`keys_settle`'s rule,
+`merge_seeded`'s), a generic seed (`chains`, `event`) lands on a concept
+entity with dozens of chains, and the vault's `Neo4j` is several entities so
+the note that answers ranks below notes that merely mention it.
+
+**Decision.** `retrieve.text_hits`: Okapi BM25 over the tenant's live episode
+texts, identifiers tokenised whole and in parts (`keys_settle` → `keys_settle`,
+`keys`, `settle`), the top `text` (10) episode ids fused with the walk's
+episode ranking by reciprocal rank (`fuse_ranks`) before the per-document cap
+and the top-`passages` cut. On by default; `--text 0` is the graph-only
+baseline. Scanned in Python for now; the contract is a `tsvector` GIN index
+and `ts_rank` once a tenant is past a few thousand episodes.
+
+**Measured** (string sufficiency; graded by gpt-4.1 in parentheses): search_8
+14/28 (10 correct) → hybrid_8 24/28 (22 correct) at 1,860 tokens per call;
+hybrid_5 20/28 (18) at 1,191. No question answered by the graph alone was lost.
+Retrieval 0.11 s → 0.17 s per question. For comparison an agent that greps and
+opens the top three files reads 16,486 tokens for 22/28 (16 correct). After
+re-syncing the working tree (494 code episodes, 2,915 entities) graph-only
+fell to 12/28 while fused hybrid_8 rose to 27/28 (20 correct, 0 wrong) at
+1,800 tokens: the text channel is what holds when a corpus grows duplicates.
+
+**Why.** The two channels fail differently. The walk gives coverage of an
+entity's footprint and reaches bridged entities (ADR 24); text gives the one
+paragraph that says the thing in the question's own words. Fusing at the
+passage level keeps each channel's ranking intact and costs nothing when one
+side is empty. Same reasoning as the lexical half of *seeding* (entry 29),
+one stage later.
+
+**Cost.** One more sequential scan per query and a second ranking to explain
+in `--explain`. A BM25 hit is not entity-anchored, so a passage can appear
+with a score that no seed explains; `format_passages` shows the fused score,
+not the channel. Tokenising every episode per query is the part that does not
+scale past a few thousand episodes; the index migration is the fix, not a
+cache.
+
 ## Conventions
 
 

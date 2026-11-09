@@ -1,0 +1,7 @@
+-- Intentionally empty.
+--
+-- This file duplicated every permissive door already created by
+-- 20260806190227_create_rls_policies.sql (same policy names on the same
+-- tables), so replaying it failed with `policy "files_app_rw" ... already
+-- exists`. The body is removed rather than the file, so a database that
+-- recorded this version as applied still matches the migration history.

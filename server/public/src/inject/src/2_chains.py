@@ -1,25 +1,32 @@
-"""Stage 1 — high-recall entity candidate extraction with gleaning.
+"""Stage 2 — one coreference call per episode, answered in span ids.
 
-Reads episodes from the store (``episodes.py``) and writes candidates back into
-it. The unit of work is the *episode*, not the file: an episode carries
+Reads episodes from the store (``1_episodes.py``) and writes candidates and
+chains back into it. The unit of work is the *episode*, not the file: an episode carries
 ``extracted_at``, so a document edit re-extracts only the episodes whose text
 actually changed, and a crashed run resumes without redoing finished episodes.
 
-    uv run python entity_linking/1_get_candidates.py --notes-dir ./notes \\
-        --store ./store.json --tenant-id <uuid>
-    uv run python entity_linking/1_get_candidates.py --store ./store.json --dry-run
+    uv run python -m src.inject.main --store ./store.json --notes-dir ./notes \\
+        --tenant-id <uuid>
 
-Prompts and the JSON schema follow ``entity_extraction.ipynb``, apart from
-naming the extracted span ``concept``.
+The span inventory is deterministic (``utils/spans.py``); the model only groups
+issued ids, and an id it never received is a protocol violation.
+
+An episode may also carry ``seeds``: chains a connector resolved itself (code
+symbols, ``src/connectors/base.py``). They are folded into the model's answer
+by ``merge_seeded`` -- a seed absorbs any model chain that touches one of its
+spans -- so the model still reads the prose while the identifiers it would only
+guess at are settled in advance.
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import sys
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections.abc import Callable, Iterable, Iterator
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -40,6 +47,12 @@ EPISODE_WORKERS = 8
 SAVE_EVERY = 25  # checkpoint the store every N episodes
 LLM_TIMEOUT = 90.0
 LLM_MAX_RETRIES = 2
+# Seconds of *no call finishing at all* before the in-flight ones are abandoned.
+# The per-request timeout above resets on every byte, so a server that holds a
+# socket open and trickles nothing can park a worker for hours -- measured: a
+# full-vault run sat for an hour at 49/301 episodes with nine threads in
+# SSLSocket.read. Abandoned work stays pending and is retried next run.
+STALL_TIMEOUT = 300.0
 
 # ── LLM ───────────────────────────────────────────────────────────────────────
 
@@ -78,6 +91,55 @@ def _complete_json(
         },
     )
     return json.loads(response.choices[0].message.content or "{}")
+
+
+def _reset_client() -> None:
+    """Close the shared HTTP client so hung reads fail instead of blocking forever.
+
+    Every ``with_options`` copy shares the underlying connection pool, so this
+    reaches the parked threads too. The next call builds a fresh client.
+    """
+    global _client
+    if _client is not None:
+        with contextlib.suppress(Exception):  # best effort; the point is to unblock
+            _client.close()
+        _client = None
+
+
+def completed[T, R](fn: Callable[[T], R], items: Iterable[T], *, workers: int,
+                    stall: float | None = None, label: str = "calls",
+                    ) -> Iterator[tuple[T, R]]:
+    """Run ``fn`` over ``items`` in threads, yielding ``(item, result)`` as each finishes.
+
+    If nothing finishes for ``stall`` seconds the remaining calls are abandoned:
+    a warning is printed, the HTTP client is closed so the parked threads error
+    out, and the generator ends. Callers see no result for those items and must
+    treat them as not done -- an episode stays pending, a surface unjudged, a
+    review pair unmerged. Exceptions from ``fn`` propagate as they would from
+    ``pool.map``.
+    """
+    stall = STALL_TIMEOUT if stall is None else stall  # read at call time, so tests can lower it
+    items = list(items)
+    if not items:
+        return
+    executor = ThreadPoolExecutor(max_workers=max(1, min(len(items), workers)))
+    futures = {executor.submit(fn, item): item for item in items}
+    pending = set(futures)
+    try:
+        while pending:
+            done, pending = wait(pending, timeout=stall, return_when=FIRST_COMPLETED)
+            if not done:
+                print(f"  WARNING: no {label} finished in {stall:.0f}s; abandoning "
+                      f"{len(pending)} in flight -- they stay pending for the next run")
+                _reset_client()
+                return
+            for future in done:
+                yield futures[future], future.result()
+    finally:
+        executor.shutdown(wait=not pending, cancel_futures=True)
+
+
+SEED_ORIGIN = "connector"
 
 
 class UnknownSpanIds(ValueError):
@@ -128,7 +190,75 @@ def extract_chains(episode_text: str, *, model: str) -> dict:
     }
 
 
-def resolve_chains(annotated: dict) -> list[list[SP.Span]]:
+def seeded_chains(episode: dict) -> list[list[SP.Span]]:
+    """The connector's pre-resolved chains for one episode, as spans.
+
+    Every seed span is checked against the episode text; one that does not
+    match is a connector bug and is dropped with a warning rather than stored,
+    since a span pointing at the wrong characters would become a surface.
+    Seeds are proper names by construction: a connector only seeds things it
+    can name exactly.
+    """
+    text = episode["text"]
+    chains: list[list[SP.Span]] = []
+    dropped = 0
+    for i, seed in enumerate(episode.get("seeds") or []):
+        spans = []
+        for j, (start, end, surface) in enumerate(seed["spans"]):
+            if text[start:end] != surface:
+                dropped += 1
+                continue
+            spans.append(SP.Span(f"s{i}.{j}", start, end, surface,
+                                 SP.PROPER_NAME, SEED_ORIGIN))
+        if spans:
+            chains.append(spans)
+    if dropped:
+        print(f"  WARNING: {dropped} seed spans did not match episode "
+              f"{episode.get('episode_id', '?')[:8]} and were dropped")
+    return chains
+
+
+def merge_seeded(chains: list[list[SP.Span]],
+                 seeded: list[list[SP.Span]]) -> list[list[SP.Span]]:
+    """Fold seeded chains into the model's: a seed absorbs every chain it touches.
+
+    Touching means a model span with the same offsets *or* the same text as a
+    seed span, whatever the parser typed it as -- an identifier the parser
+    called a nominal is still the symbol. Left as two chains, the same string
+    in two chains of one episode would read downstream as a name the passage
+    kept apart, and the surface would be marked contested (``pairing``). On
+    identical offsets the seed's span wins so the head and the union rule see
+    a proper name.
+    """
+    if not seeded:
+        return chains
+    by_text: dict[str, set[int]] = {}
+    by_offsets: dict[tuple[int, int], set[int]] = {}
+    for i, chain in enumerate(chains):
+        for span in chain:
+            by_text.setdefault(span.text, set()).add(i)
+            by_offsets.setdefault((span.start, span.end), set()).add(i)
+
+    absorbed: set[int] = set()
+    merged: list[list[SP.Span]] = []
+    for seed in seeded:
+        members = {(s.start, s.end): s for s in seed}
+        hits: set[int] = set()
+        for span in seed:
+            hits |= by_text.get(span.text, set())
+            hits |= by_offsets.get((span.start, span.end), set())
+        for i in sorted(hits - absorbed):
+            for span in chains[i]:
+                members.setdefault((span.start, span.end), span)
+        absorbed |= hits
+        chain = sorted(members.values(), key=lambda s: s.start)
+        head = SP.pick_head(chain)
+        merged.append([head] + [s for s in chain if s is not head])
+    return [c for i, c in enumerate(chains) if i not in absorbed] + merged
+
+
+def resolve_chains(annotated: dict,
+                   seeded: list[list[SP.Span]] | None = None) -> list[list[SP.Span]]:
     """Turn id-chains into span-chains, deduplicated, each with a usable head.
 
     A chain whose head did not survive validation falls back within the chain
@@ -154,7 +284,7 @@ def resolve_chains(annotated: dict) -> list[list[SP.Span]]:
         if head is None or (head.start, head.end) not in members:
             head = SP.pick_head(chain)
         chains.append([head] + [s for s in chain if s is not head])
-    return SP.union_identical_names(chains)
+    return SP.union_identical_names(merge_seeded(chains, seeded or []))
 
 
 def content_key(spans: list[SP.Span]) -> str | None:
@@ -280,7 +410,9 @@ def process_episode(
     then fail the episode loudly. A failed episode leaves ``extracted_at``
     unset, so the next run picks it up again rather than losing it silently.
     """
-    text = store["episodes"][episode_id]["text"]
+    episode = store["episodes"][episode_id]
+    text = episode["text"]
+    seeded = seeded_chains(episode)
     last: Exception | None = None
     for attempt in range(retries + 1):
         try:
@@ -291,7 +423,7 @@ def process_episode(
         except Exception as exc:  # noqa: BLE001 — API failure for this episode
             return [], [], {"episode_id": episode_id, "stage": "chains",
                             "attempt": attempt, "error": repr(exc)}
-        resolved = resolve_chains(annotated)
+        resolved = resolve_chains(annotated, seeded)
         return (build_candidates(episode_id, resolved),
                 build_chains(episode_id, resolved), None)
     return [], [], {"episode_id": episode_id, "stage": "validate",
@@ -324,39 +456,39 @@ def run(
     lock = threading.Lock()
     done = 0
 
-    with ThreadPoolExecutor(max_workers=min(len(todo), workers)) as executor:
-        futures = {
-            executor.submit(process_episode, store, eid, model=model): eid
-            for eid in todo
-        }
-        for future in as_completed(futures):
-            episode_id = futures[future]
-            records, chain_records, failure = future.result()
-            with lock:
-                for record in records:
-                    store["candidates"][record["candidate_id"]] = record
-                for chain in chain_records:
-                    store.setdefault("chains", {})[chain["chain_id"]] = chain
-                if failure is None:
-                    store["episodes"][episode_id]["extracted_at"] = (
-                        datetime.now(UTC).isoformat()
-                    )
-                else:
-                    failures.append(failure)
-                done += 1
-                if store_path and done % SAVE_EVERY == 0:
-                    E.save_store(store_path, store)
+    def work(episode_id: str) -> tuple[list[dict], list[dict], dict | None]:
+        return process_episode(store, episode_id, model=model)
+
+    for episode_id, (records, chain_records, failure) in completed(
+            work, todo, workers=workers, label="episodes"):
+        with lock:
+            for record in records:
+                store["candidates"][record["candidate_id"]] = record
+            for chain in chain_records:
+                store.setdefault("chains", {})[chain["chain_id"]] = chain
+            if failure is None:
+                store["episodes"][episode_id]["extracted_at"] = (
+                    datetime.now(UTC).isoformat()
+                )
+            else:
+                failures.append(failure)
+            done += 1
+            if store_path and done % SAVE_EVERY == 0:
+                E.save_store(store_path, store)
 
     if store_path:
         E.save_store(store_path, store)
-    extracted = len(todo) - len(failures)
+    extracted = done - len(failures)
+    abandoned = len(todo) - done
     print(f"  {extracted}/{len(todo)} episodes extracted, "
           f"{len(store['candidates'])} candidates in store")
     if failures:
         print(f"  WARNING: {len(failures)} episodes failed and stay pending "
               f"— they will be retried on the next run")
+    if abandoned:
+        print(f"  WARNING: {abandoned} episodes abandoned mid-call and stay pending")
     return {"episodes": extracted, "candidates": len(store["candidates"]),
-            "failures": failures}
+            "failures": failures, "abandoned": abandoned}
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────

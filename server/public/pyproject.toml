@@ -10,7 +10,6 @@ dependencies = [
     "slack-sdk>=3.43.0",
     "python-dotenv>=1.2.2",
     "pydantic-settings",
-
     # ── src/inject: the entity-linking blackbox ──────────────────────────────
     "openai>=2.44.0",          # coref + merge-review calls (src/2_chains)
     "numpy>=2.0",              # vectors and scoring (src/3_encode, src/4_link)
@@ -25,16 +24,22 @@ dependencies = [
     "einops>=0.8",
     "hnswlib>=0.8.0",          # ANN blocking above ann_k chains (src/4_link)
     "scikit-learn>=1.9.0",     # PairScorer.fit, only over labelled pairs
-
     # The spaCy model is data, not code, and `spacy` does not pull it in. Pinned
     # as a wheel URL rather than left to `python -m spacy download` so the image
     # builds reproducibly and offline — a download step in a Dockerfile is a
     # network dependency at build time and a different model version per rebuild.
     "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
+    "scipy>=1.12",
 ]
 
 [dependency-groups]
-dev = ["pytest", "pytest-asyncio", "httpx", "ruff"]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "httpx",
+    "ruff",
+    "tiktoken>=0.14.0",
+]
 
 [build-system]
 requires = ["hatchling"]

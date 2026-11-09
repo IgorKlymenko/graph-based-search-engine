@@ -1,0 +1,15 @@
+-- Is this surface a name, or a description that happened to be mentioned?
+--
+-- Decided once per new surface at ingest by an LLM judge
+-- (server/public/src/inject/utils/judge.py) and cached in the store, so the
+-- column is written by stage 5 and never recomputed here. Measured on a real
+-- notes vault against 410 hand labels: about 60% of stored surfaces are not
+-- entities, no cheap rule separates them (best F1 0.445), the judge reaches
+-- F1 0.78 -- see wiki/experiments.md.
+--
+-- NULL means not judged and is read as a name everywhere, so a corpus indexed
+-- before this column existed keeps working unchanged. FALSE removes the
+-- surface from seeding and from embedding; its chain_surfaces rows stay, so
+-- the mention is still recorded, and a chain whose every surface is FALSE
+-- keeps entity_id NULL -- the same withholding used for contested names.
+ALTER TABLE public.surfaces ADD COLUMN is_name boolean;
