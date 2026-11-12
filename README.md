@@ -10,18 +10,21 @@ Compared to plain RAG it:
 
 Ask from a Slack thread or plug it in as an agent's search tool. Every answer cites the passages it came from. The product built on it: [graph-web-pi.vercel.app](https://graph-web-pi.vercel.app/).
 
-<img src="docs/slack-reframe.png" width="640" alt="A Slack thread: a question with a wrong premise, the bot's heads-up, the better question, the answer and its sources">
-
-*Asked in Slack with a premise the notes contradict. The bot says so, asks the better question, answers it, and lists the sources.*
+<table>
+<tr>
+<td width="40%"><img src="docs/slack-reframe.png" alt="A Slack thread: a question with a wrong premise, the bot's heads-up, the better question, the answer and its sources"></td>
+<td width="60%"><img src="docs/neo4j-graph.png" alt="Entity graph in Neo4j"></td>
+</tr>
+<tr>
+<td><em>Asked in Slack with a premise the notes contradict. The bot says so, asks the better question, answers it, and lists the sources.</em></td>
+<td><em>One indexed corpus as a graph: 950 nodes, 3,044 relationships. Entities are clustered into communities with their text units attached.</em></td>
+</tr>
+</table>
 
 <!-- TODO: demo GIF. Record ~15 s in Slack desktop, one channel: @mention the bot with a question
      about something in the indexed notes, show the holding reply, then the threaded answer
      with its citations. Export at 800 px wide, ~12 fps, under 3 MB, save as docs/demo.gif and
      add ![demo](docs/demo.gif) above this comment. -->
-
-![Entity graph in Neo4j](docs/neo4j-graph.png)
-
-*One indexed corpus as a graph: 950 nodes, 3,044 relationships. Entities are clustered into communities with their text units attached.*
 
 ## why care
 
