@@ -15,7 +15,7 @@ Ask from a Slack thread or plug it in as an agent's search tool. Every answer ci
 
 ## why care
 
-Teams keep what they know in Slack threads and files. Keyword search doesn't know that "S. Chen", "Sarah" and "Dr. Sarah Chen" are one person, and neither keyword search nor plain RAG can answer an open question: to search well you're expected to already know what you're looking for. I believe storing information the way the brain (presumably) does is the way to go, a hippocampal index pointing into the content rather than a pile of chunks, so I built one.
+Teams keep what they know in Slack threads and files. Keyword search doesn't know that "S. Chen", "Sarah" and "Dr. Sarah Chen" are one person, and neither keyword search nor plain RAG can answer an open question: <mark>to search well you're expected to already know what you're looking for.</mark> I believe storing information the way the brain (presumably) does is the way to go, a hippocampal index pointing into the content rather than a pile of chunks, so I built one.
 
 A lot of NLP for entity resolution and a lot of Postgres, but it worked. Compared to plain RAG it:
 
