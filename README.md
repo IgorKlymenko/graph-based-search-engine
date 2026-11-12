@@ -1,6 +1,6 @@
 # graph-based-search-engine
 
-A search engine over a team's Slack channels and repos: mentions are linked into an entity graph in Postgres, and questions are answered with cited passages, in a Slack thread or through an agent's search tool.
+A search engine over a team's Slack channels and other data, inspired by hippocampal index theory. Text is parsed into entities and relationships and stored as a graph index in Postgres. Compared to plain RAG it answers questions that use a different name for the same thing, pushes back when a question's premise is wrong, and in the typical run it costs a tool-using agent fewer tokens. Ask from a Slack thread or plug it in as an agent's search tool; every answer cites the passages it came from. The product built on it is at [graph-web-pi.vercel.app](https://graph-web-pi.vercel.app/).
 
 ![demo](docs/demo.gif)
 <!-- TODO: record ~15 s in Slack desktop, one channel: @mention the bot with a question
@@ -11,11 +11,11 @@ A search engine over a team's Slack channels and repos: mentions are linked into
 
 *One indexed corpus as a graph: 950 nodes, 3,044 relationships. Entities are clustered into communities with their text units attached.*
 
-## Why I built this
+## why care
 
-Teams keep what they know in Slack threads and repos, and keyword search doesn't know that "S. Chen", "Sarah" and "Dr. Sarah Chen" are one person. I wanted to find out how much an entity graph adds over plain dense retrieval, whether the same search cuts the tokens an agent burns grepping through a codebase, and to build the multi-tenant plumbing properly rather than as a demo. This was an independent research project.
+Teams keep what they know in Slack threads and files. Keyword search doesn't know that "S. Chen", "Sarah" and "Dr. Sarah Chen" are one person, and neither keyword search nor plain RAG can answer an open question: to search well you're expected to already know what you're looking for. I believe storing information the way the brain (presumably) does is the way to go, a hippocampal index pointing into the content rather than a pile of chunks, so I built one. A lot of NLP for entity resolution and a lot of Postgres, but it worked. Along the way I wanted to find out how much an entity graph adds over dense retrieval, whether the same search cuts the tokens an agent burns grepping through a codebase, and whether I could build the multi-tenant plumbing properly rather than as a demo. This was an independent research project; the longer version of the why is on the [site](https://graph-web-pi.vercel.app/misc).
 
-## Run it locally
+## run it locally
 
 Needs `uv`. Anything that touches the database also needs the Supabase CLI and Docker (system-level installs). Extraction and answering call OpenAI.
 
@@ -38,7 +38,7 @@ With a database (`supabase start` from the repo root, then set a password on the
 
 Env vars: `OPENAI_API_KEY`, `SLACK_SIGNING_SECRET`, `SLACK_BOT_TOKEN`, `DATABASE_URL`, `CONNECTOR_DATABASE_URL`, optional `GITHUB_TOKEN` for repo sync and `VERIFY_TIMESTAMP=false` for replaying through ngrok.
 
-## How it works
+## how it works
 
 ![Query path](docs/query-path.png)
 
@@ -62,14 +62,14 @@ Env vars: `OPENAI_API_KEY`, `SLACK_SIGNING_SECRET`, `SLACK_BOT_TOKEN`, `DATABASE
 
 `old_server/` is the earlier Neo4j version and the stage tests still live there.
 
-## The hard part
+## what's the problem
 
 Deciding what an edge is. The first design stored edges and precomputed a CSR graph per tenant. I threw that out: there is no edges table. Two entities are connected when their chains share an episode, computed by a self-join at query time, and weighted by PMI with a floor of two co-occurrences. Raw counts let hub entities swallow the walk (precision on the synthetic rig 0.786, binary edges 0.000, PMI 0.931 with 58% fewer edges), and on real notes 94.8% of pairs co-occur exactly once, which is where the floor comes from. The cost is that PageRank is a Python-side sparse iteration over a join instead of a cached blob, so past some tenant size it needs the precomputed payload the ADRs describe and don't build. The graph also isn't a dense-retrieval replacement: dense wins at finding one passage, the graph wins at finding everything about an entity, including documents that only use an alias. Numbers and rigs: `wiki/measurements.md`.
 
-## Stack
+## stack
 
 Python 3.13, FastAPI, Postgres on Supabase (pgvector, pg_trgm, row-level security), psycopg, spaCy, nomic-embed-text-v1.5 via transformers/torch, hnswlib, scikit-learn, OpenAI (gpt-4.1-mini, gpt-4.1, text-embedding-3-large), Slack Events API, uv, pytest, ruff.
 
-## License
+## license
 
 [PolyForm Noncommercial 1.0.0](LICENSE): free for non-commercial use. Commercial use: contact me.
