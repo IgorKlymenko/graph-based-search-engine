@@ -62,7 +62,7 @@ Env vars: `OPENAI_API_KEY`, `SLACK_SIGNING_SECRET`, `SLACK_BOT_TOKEN`, `DATABASE
 
 `old_server/` is the earlier Neo4j version and the stage tests still live there.
 
-## what's the problem
+## how the graph is wired
 
 Deciding what an edge is. The first design stored edges and precomputed a CSR graph per tenant. I threw that out: there is no edges table. Two entities are connected when their chains share an episode, computed by a self-join at query time, and weighted by PMI with a floor of two co-occurrences. Raw counts let hub entities swallow the walk (precision on the synthetic rig 0.786, binary edges 0.000, PMI 0.931 with 58% fewer edges), and on real notes 94.8% of pairs co-occur exactly once, which is where the floor comes from. The cost is that PageRank is a Python-side sparse iteration over a join instead of a cached blob, so past some tenant size it needs the precomputed payload the ADRs describe and don't build. The graph also isn't a dense-retrieval replacement: dense wins at finding one passage, the graph wins at finding everything about an entity, including documents that only use an alias. Numbers and rigs: `wiki/measurements.md`.
 
