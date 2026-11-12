@@ -1,6 +1,6 @@
 # graph-based-search-engine
 
-A search engine over a team's Slack channels and other data, inspired by hippocampal index theory. Text is parsed into entities and relationships and stored as a graph index in Postgres.
+A search engine over a team's Slack channels and other data, inspired by [hippocampal index theory](https://doi.org/10.1037/0735-7044.100.2.147). Text is parsed into entities and relationships and stored as a graph index in Postgres.
 
 Ask from a Slack thread or plug it in as an agent's search tool. Every answer cites the passages it came from. The product built on it: [graph-web-pi.vercel.app](https://graph-web-pi.vercel.app/).
 
