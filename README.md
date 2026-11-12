@@ -1,11 +1,23 @@
 # graph-based-search-engine
 
-A search engine over a team's Slack channels and other data, inspired by hippocampal index theory. Text is parsed into entities and relationships and stored as a graph index in Postgres. Compared to plain RAG it answers questions that use a different name for the same thing, pushes back when a question's premise is wrong, and in the typical run it costs a tool-using agent fewer tokens. Ask from a Slack thread or plug it in as an agent's search tool; every answer cites the passages it came from. The product built on it is at [graph-web-pi.vercel.app](https://graph-web-pi.vercel.app/).
+A search engine over a team's Slack channels and other data, inspired by hippocampal index theory. Text is parsed into entities and relationships and stored as a graph index in Postgres.
 
-![demo](docs/demo.gif)
-<!-- TODO: record ~15 s in Slack desktop, one channel: @mention the bot with a question
+Compared to plain RAG it:
+
+- answers questions that use a different name for the same thing
+- pushes back when a question's premise is wrong
+- costs a tool-using agent fewer tokens in the typical run
+
+Ask from a Slack thread or plug it in as an agent's search tool. Every answer cites the passages it came from. The product built on it: [graph-web-pi.vercel.app](https://graph-web-pi.vercel.app/).
+
+<img src="docs/slack-reframe.png" width="640" alt="A Slack thread: a question with a wrong premise, the bot's heads-up, the better question, the answer and its sources">
+
+*Asked in Slack with a premise the notes contradict. The bot says so, asks the better question, answers it, and lists the sources.*
+
+<!-- TODO: demo GIF. Record ~15 s in Slack desktop, one channel: @mention the bot with a question
      about something in the indexed notes, show the holding reply, then the threaded answer
-     with its citations. Export at 800 px wide, ~12 fps, under 3 MB, save as docs/demo.gif. -->
+     with its citations. Export at 800 px wide, ~12 fps, under 3 MB, save as docs/demo.gif and
+     add ![demo](docs/demo.gif) above this comment. -->
 
 ![Entity graph in Neo4j](docs/neo4j-graph.png)
 
