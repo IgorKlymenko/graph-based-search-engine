@@ -2,12 +2,6 @@
 
 A search engine over a team's Slack channels and other data, inspired by hippocampal index theory. Text is parsed into entities and relationships and stored as a graph index in Postgres.
 
-Compared to plain RAG it:
-
-- answers questions that use a different name for the same thing
-- pushes back when a question's premise is wrong
-- costs a tool-using agent fewer tokens in the typical run
-
 Ask from a Slack thread or plug it in as an agent's search tool. Every answer cites the passages it came from. The product built on it: [graph-web-pi.vercel.app](https://graph-web-pi.vercel.app/).
 
 <table>
@@ -28,7 +22,15 @@ Ask from a Slack thread or plug it in as an agent's search tool. Every answer ci
 
 ## why care
 
-Teams keep what they know in Slack threads and files. Keyword search doesn't know that "S. Chen", "Sarah" and "Dr. Sarah Chen" are one person, and neither keyword search nor plain RAG can answer an open question: to search well you're expected to already know what you're looking for. I believe storing information the way the brain (presumably) does is the way to go, a hippocampal index pointing into the content rather than a pile of chunks, so I built one. A lot of NLP for entity resolution and a lot of Postgres, but it worked. Along the way I wanted to find out how much an entity graph adds over dense retrieval, whether the same search cuts the tokens an agent burns grepping through a codebase, and whether I could build the multi-tenant plumbing properly rather than as a demo. This was an independent research project; the longer version of the why is on the [site](https://graph-web-pi.vercel.app/misc).
+Teams keep what they know in Slack threads and files. Keyword search doesn't know that "S. Chen", "Sarah" and "Dr. Sarah Chen" are one person, and neither keyword search nor plain RAG can answer an open question: to search well you're expected to already know what you're looking for. I believe storing information the way the brain (presumably) does is the way to go, a hippocampal index pointing into the content rather than a pile of chunks, so I built one.
+
+A lot of NLP for entity resolution and a lot of Postgres, but it worked. Compared to plain RAG it:
+
+- answers questions that use a different name for the same thing
+- pushes back when a question's premise is wrong
+- costs a tool-using agent fewer tokens in the typical run
+
+Along the way I wanted to find out how much an entity graph adds over dense retrieval, whether the same search cuts the tokens an agent burns grepping through a codebase, and whether I could build the multi-tenant plumbing properly rather than as a demo. This was an independent research project; the longer version of the why is on the [site](https://graph-web-pi.vercel.app/misc).
 
 ## run it locally
 
